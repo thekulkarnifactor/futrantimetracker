@@ -1,423 +1,247 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shift Tracker Pro</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Arial, sans-serif;
-            background-color: #f1f5f9;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px 0;
-        }
-        .card {
-            background: #ffffff;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05);
-            width: 400px;
-            text-align: center;
-        }
-        h2 {
-            color: #1e293b;
-            margin-top: 0;
-            font-size: 22px;
-            margin-bottom: 5px;
-        }
-        .sub-target {
-            font-size: 13px;
-            color: #64748b;
-            margin-bottom: 20px;
-        }
-        .status-badge {
-            display: inline-block;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 20px;
-        }
-        .status-not-started { background: #e2e8f0; color: #475569; }
-        .status-active { background: #dcfce7; color: #15803d; }
-        .status-break { background: #fef9c3; color: #a16207; }
-        .status-completed { background: #dbeafe; color: #1d4ed8; }
-       
-        /* Control Grid Layout */
-        .btn-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-        button {
-            padding: 14px;
-            font-size: 14px;
-            font-weight: bold;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-        }
-        button:disabled {
-            background-color: #cbd5e1 !important;
-            color: #94a3b8 !important;
-            cursor: not-allowed;
-            box-shadow: none !important;
-        }
-        .btn-punchin { background-color: #2563eb; box-shadow: 0 3px 8px rgba(37,99,235,0.2); }
-        .btn-punchin:hover { background-color: #1d4ed8; }
-       
-        .btn-break { background-color: #ea580c; box-shadow: 0 3px 8px rgba(234,88,12,0.2); }
-        .btn-break:hover { background-color: #c2410c; }
-       
-        .btn-back { background-color: #16a34a; box-shadow: 0 3px 8px rgba(22,163,74,0.2); }
-        .btn-back:hover { background-color: #15803d; }
-       
-        .btn-logoff { background-color: #dc2626; box-shadow: 0 3px 8px rgba(220,38,38,0.2); grid-column: span 2; }
-        .btn-logoff:hover { background-color: #b91c1c; }
- 
-        .metrics {
-            margin-top: 20px;
-            border-top: 1px solid #e2e8f0;
-            padding-top: 15px;
-            text-align: left;
-        }
-        .metric-line {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-            font-size: 14px;
-            color: #475569;
-        }
-        .metric-line strong { color: #0f172a; }
-       
-        #leaveClock {
-            font-size: 26px;
-            font-weight: 800;
-            color: #1e3d59;
-            text-align: center;
-            margin: 15px 0;
-            background: #f8fafc;
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px dashed #cbd5e1;
-        }
- 
-        /* Correction Panel Styling */
-        .correction-panel {
-            margin-top: 20px;
-            border-top: 2px solid #e2e8f0;
-            padding-top: 15px;
-            text-align: left;
-        }
-        .panel-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: #475569;
-            margin-bottom: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        label {
-            font-size: 11px;
-            font-weight: 600;
-            color: #64748b;
-            margin-bottom: 4px;
-        }
-        input {
-            padding: 8px;
-            font-size: 13px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            outline: none;
-        }
-        input:focus { border-color: #3b82f6; }
-        .btn-update {
-            width: 100%;
-            padding: 10px;
-            background-color: #64748b;
-            font-size: 13px;
-            border-radius: 6px;
-            margin-top: 5px;
-        }
-        .btn-update:hover { background-color: #475569; }
-       
-        .reset-link {
-            display: block;
-            text-align: center;
-            margin-top: 15px;
-            font-size: 11px;
-            color: #cbd5e1;
-            text-decoration: none;
-            cursor: pointer;
-        }
-        .reset-link:hover { color: #f43f5e; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Synced Shift Dashboard</title>
+    <style>
+        :root {
+            --bg-main: #0f172a;
+            --card-bg: #1e293b;
+            --primary: #3b82f6;
+            --success: #22c55e;
+            --warning: #eab308;
+            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --border: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--bg-main); color: var(--text-main); padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .dashboard { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
+        .card { background-color: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+        .subtitle { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; }
+        .status-wrapper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .badge { padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
+        .bg-not_started { background: #475569; color: #cbd5e1; }
+        .bg-active { background: #16a34a; color: #dcfce7; }
+        .bg-on_break { background: #ca8a04; color: #fef9c3; }
+        .bg-completed { background: #1d4ed8; color: #dbeafe; }
+        .time-display { text-align: center; margin: 12px 0; }
+        .time-banner { font-size: 36px; font-weight: 800; color: var(--primary); letter-spacing: -1px; }
+        .countdown-text { font-size: 13px; color: var(--text-sub); font-weight: 600; }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
+        button { padding: 16px; font-size: 14px; font-weight: 700; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; }
+        button:disabled { background-color: #334155 !important; color: #64748b !important; }
+        .btn-in { background-color: var(--primary); }
+        .btn-break { background-color: var(--warning); color: #451a03; }
+        .btn-back { background-color: var(--success); }
+        .btn-off { background-color: var(--danger); grid-column: span 2; }
+        .metrics-list { background-color: rgba(15, 23, 42, 0.4); border-radius: 12px; padding: 12px 16px; margin-top: 16px; }
+        .metric-row { display: flex; justify-content: space-between; padding: 10px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+        .metric-row:last-child { border: none; }
+        .metric-row span { color: var(--text-sub); }
+        .metric-row strong { color: var(--text-main); }
+        .sync-indicator { text-align: center; font-size: 11px; color: var(--text-sub); margin-top: 5px; }
+    </style>
 </head>
 <body>
- 
-<div class="card">
-    <h2>Work Clock Tracker</h2>
-    <div class="sub-target">Target: 7 Hours Fixed Active Shift</div>
-    <div id="statusBadge" class="status-badge status-not-started">Not Started</div>
-   
-    <div class="btn-grid">
-        <button id="btnIn" class="btn-punchin" onclick="punchIn()">First In</button>
-        <button id="btnBreak" class="btn-break" onclick="goBreak()">Go Break</button>
-        <button id="btnBack" class="btn-back" onclick="returnBreak()">Back In</button>
-        <button id="btnLogoff" class="btn-logoff" onclick="logOff()">Log Off For Day</button>
-    </div>
-   
-    <div class="metrics">
-        <div class="metric-line">First Punch In: <strong id="lblFirstIn">--:--</strong></div>
-        <div class="metric-line">Total Break Gaps: <strong id="lblBreakTime">0 mins</strong></div>
-        <div class="metric-line">Active Hours Today: <strong id="lblActiveHrs">0h 0m</strong></div>
-        <div id="leaveClock">Estimated Leave: --:--</div>
-    </div>
- 
-    <div class="correction-panel">
-        <div class="panel-title">Manual Correction / Overrides</div>
-        <div class="form-row">
-            <div class="form-group">
-                <label>First Punch In:</label>
-                <input type="time" id="inputFirstIn">
-            </div>
-            <div class="form-group">
-                <label>Last Punch In:</label>
-                <input type="time" id="inputLastIn">
-            </div>
-        </div>
-        <div class="form-group" style="margin-bottom: 12px;">
-            <label>Forced Active Hours (e.g. 4.5):</label>
-            <input type="number" id="inputActiveHrs" step="0.01" placeholder="Override portal hours">
-        </div>
-        <button class="btn-update" onclick="applyManualCorrection()">Apply Manual Adjustments</button>
-    </div>
- 
-    <span class="reset-link" onclick="forceReset()">Wipe Cached Storage</span>
+
+<div class="dashboard">
+    <div class="card">
+        <div class="status-wrapper">
+            <div>
+                <h2>Synced Shift Controller</h2>
+                <div style="font-size: 12px; color: var(--text-sub);">Real-time Cloud Tracking</div>
+            </div>
+            <div id="statusBadge" class="badge bg-not_started">Loading...</div>
+        </div>
+
+        <div class="time-display">
+            <div id="timeBanner" class="time-banner">--:-- --</div>
+            <div id="countdownText" class="countdown-text">Syncing with cloud database...</div>
+        </div>
+
+        <div class="btn-grid">
+            <button id="btnIn" class="btn-in" onclick="punchIn()">☀️ First In</button>
+            <button id="btnBreak" class="btn-break" onclick="goBreak()">☕ Go Break</button>
+            <button id="btnBack" class="btn-back" onclick="returnBreak()">💻 Back In</button>
+            <button id="btnLogoff" class="btn-off" onclick="logOff()">🏁 Log Off Day</button>
+        </div>
+
+        <div class="metrics-list">
+            <div class="metric-row"><span>Arrival Clock</span><strong id="lblFirstIn">--:--</strong></div>
+            <div class="metric-row"><span>Break Gaps</span><strong id="lblBreakTime">0 mins</strong></div>
+            <div class="metric-row"><span>Active Logged</span><strong id="lblActiveHrs">0h 0m</strong></div>
+        </div>
+        <div id="syncStatus" class="sync-indicator">Checking cloud connection...</div>
+    </div>
 </div>
- 
+
 <script>
-    const targetActiveMinutes = 7 * 60;
-   
-    let currentState = "NOT_STARTED"; // NOT_STARTED, ACTIVE, ON_BREAK, COMPLETED
-    let firstInTime = null;
-    let accumulatedActiveMs = 0;
-    let accumulatedBreakMs = 0;
-    let lastStateChangeTime = null;
-    let currentSavedDate = "";
- 
-    loadFromStorage();
-    setInterval(updateUI, 1000);
- 
-    // --- BUTTON TRIGGER FUNCTIONS ---
-    function punchIn() {
-        const now = new Date();
-        firstInTime = now;
-        lastStateChangeTime = now;
-        currentState = "ACTIVE";
-        saveToStorage();
-        updateUI();
-    }
- 
-    function goBreak() {
-        const now = new Date();
-        accumulatedActiveMs += (now - new Date(lastStateChangeTime));
-        lastStateChangeTime = now;
-        currentState = "ON_BREAK";
-        saveToStorage();
-        updateUI();
-    }
- 
-    function returnBreak() {
-        const now = new Date();
-        accumulatedBreakMs += (now - new Date(lastStateChangeTime));
-        lastStateChangeTime = now;
-        currentState = "ACTIVE";
-        saveToStorage();
-        updateUI();
-    }
- 
-    function logOff() {
-        if(confirm("Confirm logging off and ending your shift tracking for today?")) {
-            const now = new Date();
-            if (currentState === "ACTIVE") {
-                accumulatedActiveMs += (now - new Date(lastStateChangeTime));
-            } else if (currentState === "ON_BREAK") {
-                accumulatedBreakMs += (now - new Date(lastStateChangeTime));
-            }
-            lastStateChangeTime = now;
-            currentState = "COMPLETED";
-            saveToStorage();
-            updateUI();
-        }
-    }
- 
-    // --- MANUAL CORRECTION INJECTION ---
-    function applyManualCorrection() {
-        const manualFirstIn = document.getElementById('inputFirstIn').value;
-        const manualLastIn = document.getElementById('inputLastIn').value;
-        const manualActiveHrs = document.getElementById('inputActiveHrs').value;
- 
-        const now = new Date();
-        const baseDateStr = now.toDateString();
- 
-        // 1. If First In is manually provided
-        if (manualFirstIn) {
-            firstInTime = new Date(baseDateStr + " " + manualFirstIn);
-        }
- 
-        // 2. Case A: If user overrides using raw Active Portal Hours
-        if (manualActiveHrs !== "") {
-            const parsedActiveHrs = parseFloat(manualActiveHrs);
-            accumulatedActiveMs = parsedActiveHrs * 3600 * 1000;
-           
-            if (manualLastIn) {
-                const lastInDate = new Date(baseDateStr + " " + manualLastIn);
-                lastStateChangeTime = lastInDate;
-               
-                if (firstInTime) {
-                    const totalTimelineMs = lastInDate - firstInTime;
-                    accumulatedBreakMs = totalTimelineMs - accumulatedActiveMs;
-                    if(accumulatedBreakMs < 0) accumulatedBreakMs = 0;
-                }
-            } else {
-                lastStateChangeTime = now;
-                if (firstInTime) {
-                    const totalTimelineMs = now - firstInTime;
-                    accumulatedBreakMs = totalTimelineMs - accumulatedActiveMs;
-                    if(accumulatedBreakMs < 0) accumulatedBreakMs = 0;
-                }
-            }
-            currentState = "ACTIVE";
-        }
-        // 3. Case B: If user only has missing Punch Times but no portal float standard
-        else if (manualFirstIn && manualLastIn) {
-            const firstInDate = new Date(baseDateStr + " " + manualFirstIn);
-            const lastInDate = new Date(baseDateStr + " " + manualLastIn);
-           
-            accumulatedBreakMs = lastInDate - firstInDate; // Assuming the period between them was the missed chunk
-            accumulatedActiveMs = 0;
-            lastStateChangeTime = lastInDate;
-            currentState = "ACTIVE";
-        }
- 
-        saveToStorage();
-        updateUI();
-        alert("Timelines updated successfully!");
-    }
- 
-    // --- RENDER UI LAYER ---
-    function updateUI() {
-        checkAndResetNewDay();
-       
-        const btnIn = document.getElementById('btnIn');
-        const btnBreak = document.getElementById('btnBreak');
-        const btnBack = document.getElementById('btnBack');
-        const btnLogoff = document.getElementById('btnLogoff');
-        const badge = document.getElementById('statusBadge');
-       
-        // Dynamic Button State Rules
-        if (currentState === "NOT_STARTED") {
-            badge.innerText = "Not Started"; badge.className = "status-badge status-not-started";
-            btnIn.disabled = false; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
-            document.getElementById('lblFirstIn').innerText = "--:--";
-            document.getElementById('lblBreakTime').innerText = "0 mins";
-            document.getElementById('lblActiveHrs').innerText = "0h 0m";
-            document.getElementById('leaveClock').innerText = "Leave Time: --:--";
-            return;
-        } else if (currentState === "ACTIVE") {
-            badge.innerText = "Active Work"; badge.className = "status-badge status-active";
-            btnIn.disabled = true; btnBreak.disabled = false; btnBack.disabled = true; btnLogoff.disabled = false;
-        } else if (currentState === "ON_BREAK") {
-            badge.innerText = "On Break"; badge.className = "status-badge status-break";
-            btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = false; btnLogoff.disabled = false;
-        } else if (currentState === "COMPLETED") {
-            badge.innerText = "Shift Ended"; badge.className = "status-badge status-completed";
-            btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
-        }
- 
-        document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
- 
-        const now = new Date();
-        let currentActiveMs = accumulatedActiveMs;
-        let currentBreakMs = accumulatedBreakMs;
-       
-        if (currentState === "ACTIVE") {
-            currentActiveMs += (now - new Date(lastStateChangeTime));
-        } else if (currentState === "ON_BREAK") {
-            currentBreakMs += (now - new Date(lastStateChangeTime));
-        }
-       
-        const activeMinutes = Math.floor(currentActiveMs / 60000);
-        const breakMinutes = Math.floor(currentBreakMs / 60000);
-       
-        document.getElementById('lblBreakTime').innerText = `${breakMinutes} mins`;
-        document.getElementById('lblActiveHrs').innerText = `${Math.floor(activeMinutes / 60)}h ${activeMinutes % 60}m`;
-       
-        const totalShiftDurationMs = (targetActiveMinutes * 60 * 1000) + currentBreakMs;
-        const departureTime = new Date(new Date(firstInTime).getTime() + totalShiftDurationMs);
-       
-        if (currentState === "COMPLETED") {
-             document.getElementById('leaveClock').innerText = "Logged Off";
-        } else {
-             document.getElementById('leaveClock').innerText = "Leave Time: " + departureTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
-    }
- 
-    // --- LOCALSTORAGE STORAGE HANDLERS ---
-    function saveToStorage() {
-        const data = { currentState, firstInTime, accumulatedActiveMs, accumulatedBreakMs, lastStateChangeTime, dateTracked: new Date().toDateString() };
-        localStorage.setItem('greyhr_pro_tracker_data', JSON.stringify(data));
-    }
- 
-    function loadFromStorage() {
-        const stored = localStorage.getItem('greyhr_pro_tracker_data');
-        if (!stored) return;
-        const data = JSON.parse(stored);
-        if (data.dateTracked === new Date().toDateString()) {
-            currentState = data.currentState;
-            firstInTime = data.firstInTime ? new Date(data.firstInTime) : null;
-            accumulatedActiveMs = data.accumulatedActiveMs;
-            accumulatedBreakMs = data.accumulatedBreakMs;
-            lastStateChangeTime = data.lastStateChangeTime ? new Date(data.lastStateChangeTime) : null;
-            currentSavedDate = data.dateTracked;
-        } else {
-            forceResetWithoutConfirm();
-        }
-    }
- 
-    function checkAndResetNewDay() {
-        if (currentSavedDate && currentSavedDate !== new Date().toDateString()) { forceResetWithoutConfirm(); }
-    }
- 
-    function forceResetWithoutConfirm() {
-        localStorage.removeItem('greyhr_pro_tracker_data');
-        currentState = "NOT_STARTED"; firstInTime = null; accumulatedActiveMs = 0; accumulatedBreakMs = 0; lastStateChangeTime = null;
-        currentSavedDate = new Date().toDateString();
-    }
- 
-    function forceReset() {
-        if(confirm("Completely wipe local storage cached states?")) { forceResetWithoutConfirm(); updateUI(); }
-    }
+    // --- CONFIGURE YOUR SUPABASE DETAILS HERE ---
+    const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cWVxZ21nd2NkZXNlenBpdGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDk5NjAsImV4cCI6MjA5NTk4NTk2MH0.x-GI2NFVVKuw3_BBjVvFTWdk7MhBce1okeWdxTflgV4";
+    
+    const targetActiveMinutes = 7 * 60; 
+    let currentState = "NOT_STARTED"; 
+    let firstInTime = null;
+    let accumulatedActiveMs = 0;
+    let accumulatedBreakMs = 0;
+    let lastStateChangeTime = null;
+    const todayStr = new Date().toDateString();
+
+    // Pull database logs immediately on boot, then query every 10 seconds for phone updates
+    loadFromCloud();
+    setInterval(loadFromCloud, 10000); 
+    setInterval(updateUI, 1000);
+
+    async function saveToCloud() {
+        document.getElementById('syncStatus').innerText = "☁️ Saving changes...";
+        const payload = {
+            current_state: currentState,
+            first_in_time: firstInTime ? new Date(firstInTime).toISOString() : null,
+            accumulated_active_ms: accumulatedActiveMs,
+            accumulated_break_ms: accumulatedBreakMs,
+            last_state_change_time: lastStateChangeTime ? new Date(lastStateChangeTime).toISOString() : null,
+            date_tracked: todayStr
+        };
+
+        try {
+            // Check if record exists for today
+            const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(todayStr)}`, {
+                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+            });
+            const existing = await checkRes.json();
+
+            let url = `${SUPABASE_URL}/rest/v1/tracker_logs`;
+            let method = "POST";
+
+            if (existing && existing.length > 0) {
+                url = `${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(todayStr)}`;
+                method = "PATCH";
+            }
+
+            await fetch(url, {
+                method: method,
+                headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                body: JSON.stringify(payload)
+            });
+            document.getElementById('syncStatus').innerText = "✅ Synchronized with Cloud";
+        } catch (err) {
+            document.getElementById('syncStatus').innerText = "❌ Sync Connection Error";
+        }
+    }
+
+    async function loadFromCloud() {
+        try {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(todayStr)}`, {
+                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+            });
+            const data = await res.json();
+            
+            if (data && data.length > 0) {
+                const log = data[0];
+                currentState = log.current_state;
+                firstInTime = log.first_in_time ? new Date(log.first_in_time) : null;
+                accumulatedActiveMs = parseFloat(log.accumulated_active_ms);
+                accumulatedBreakMs = parseFloat(log.accumulated_break_ms);
+                lastStateChangeTime = log.last_state_change_time ? new Date(log.last_state_change_time) : null;
+                document.getElementById('syncStatus').innerText = "🔗 Cloud Linked";
+            } else {
+                currentState = "NOT_STARTED";
+                document.getElementById('syncStatus').innerText = "☀️ Fresh Shift Waiting";
+            }
+        } catch (e) {
+            document.getElementById('syncStatus').innerText = "⚠️ Offline Mode";
+        }
+    }
+
+    function punchIn() {
+        const now = new Date(); firstInTime = now; lastStateChangeTime = now; currentState = "ACTIVE";
+        updateUI(); saveToCloud();
+    }
+
+     Tar() { /* code omitted for space */ }
+    function goBreak() {
+        const now = new Date(); accumulatedActiveMs += (now - new Date(lastStateChangeTime)); lastStateChangeTime = now; currentState = "ON_BREAK";
+        updateUI(); saveToCloud();
+    }
+
+    function returnBreak() {
+        const now = new Date(); accumulatedBreakMs += (now - new Date(lastStateChangeTime)); lastStateChangeTime = now; currentState = "ACTIVE";
+        updateUI(); saveToCloud();
+    }
+
+    function logOff() {
+        if(confirm("End shift?")) {
+            const now = new Date();
+            if (currentState === "ACTIVE") accumulatedActiveMs += (now - new Date(lastStateChangeTime));
+            else if (currentState === "ON_BREAK") accumulatedBreakMs += (now - new Date(lastStateChangeTime));
+            lastStateChangeTime = now; currentState = "COMPLETED";
+            updateUI(); saveToCloud();
+        }
+    }
+
+    function updateUI() {
+        const btnIn = document.getElementById('btnIn'); const btnBreak = document.getElementById('btnBreak');
+        const btnBack = document.getElementById('btnBack'); const btnLogoff = document.getElementById('btnLogoff');
+        const badge = document.getElementById('statusBadge');
+        
+        if (currentState === "NOT_STARTED") {
+            badge.innerText = "Not Started"; badge.className = "badge bg-not_started";
+            btnIn.disabled = false; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
+            document.getElementById('timeBanner').innerText = "--:-- --";
+            document.getElementById('countdownText').innerText = "Tap First In to start tracking";
+            return;
+        } else if (currentState === "ACTIVE") {
+            badge.innerText = "Active"; badge.className = "badge bg-active";
+            btnIn.disabled = true; btnBreak.disabled = false; btnBack.disabled = true; btnLogoff.disabled = false;
+        } else if (currentState === "ON_BREAK") {
+            badge.innerText = "On Break"; badge.className = "badge bg-on_break";
+            btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = false; btnLogoff.disabled = false;
+        } else if (currentState === "COMPLETED") {
+            badge.innerText = "Ended"; badge.className = "badge bg-completed";
+            btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
+        }
+
+        document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const now = new Date();
+        let currentActiveMs = accumulatedActiveMs; let currentBreakMs = accumulatedBreakMs;
+        
+        if (currentState === "ACTIVE") currentActiveMs += (now - new Date(lastStateChangeTime));
+        else if (currentState === "ON_BREAK") currentBreakMs += (now - new Date(lastStateChangeTime));
+        
+        const activeMinutes = Math.floor(currentActiveMs / 60000);
+        const breakMinutes = Math.floor(currentBreakMs / 60000);
+        
+        document.getElementById('lblBreakTime').innerText = `${breakMinutes} mins`;
+        document.getElementById('lblActiveHrs').innerText = `${Math.floor(activeMinutes / 60)}h ${activeMinutes % 60}m`;
+        
+        const totalShiftDurationMs = (targetActiveMinutes * 60 * 1000) + currentBreakMs;
+        const departureTime = new Date(new Date(firstInTime).getTime() + totalShiftDurationMs);
+        
+        if (currentState === "COMPLETED") {
+            document.getElementById('timeBanner').innerText = "Ended";
+            document.getElementById('countdownText').innerText = "Data archived.";
+        } else {
+            document.getElementById('timeBanner').innerText = departureTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const timeRemainingMs = departureTime - now;
+            if (timeRemainingMs <= 0) {
+                document.getElementById('countdownText').innerText = "🎉 Goal reached! Safe to leave.";
+            } else {
+                const remSecs = Math.floor(timeRemainingMs / 1000);
+                document.getElementById('countdownText').innerText = `⏱️ Countdown: ${Math.floor(remSecs / 3600)}h ${Math.floor((remSecs % 3600) / 60)}m remaining`;
+            }
+        }
+    }
 </script>
- 
 </body>
 </html>
