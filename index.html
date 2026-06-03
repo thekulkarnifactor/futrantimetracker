@@ -51,7 +51,7 @@
         .metric-row strong { color: var(--text-main); }
         .sync-indicator { text-align: center; font-size: 11px; color: var(--text-sub); margin-top: 5px; }
 
-        /* Manual Correction Inputs Styling */
+        /* Manual Correction Styling */
         .form-group { display: flex; flex-direction: column; margin-bottom: 12px; }
         .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
         label { font-size: 11px; font-weight: 700; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -116,6 +116,7 @@
 
 <script>
     // --- CONFIGURE YOUR SUPABASE DETAILS HERE ---
+    // Ensure URL has NO trailing slash at the end (ends in .co)
     const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cWVxZ21nd2NkZXNlenBpdGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDk5NjAsImV4cCI6MjA5NTk4NTk2MH0.x-GI2NFVVKuw3_BBjVvFTWdk7MhBce1okeWdxTflgV4";
     
@@ -125,10 +126,10 @@
     let accumulatedActiveMs = 0;
     let accumulatedBreakMs = 0;
     let lastStateChangeTime = null;
-    const todayStr = new Date().toDateString();
+    let currentSavedDate = new Date().toDateString();
 
     loadFromCloud();
-    setInterval(loadFromCloud, 10000); // Check for cloud updates every 10 seconds
+    setInterval(loadFromCloud, 10000); // Check database every 10 seconds
     setInterval(updateUI, 1000);
 
     async function saveToCloud() {
@@ -139,11 +140,11 @@
             accumulated_active_ms: accumulatedActiveMs,
             accumulated_break_ms: accumulatedBreakMs,
             last_state_change_time: lastStateChangeTime ? new Date(lastStateChangeTime).toISOString() : null,
-            date_tracked: todayStr
+            date_tracked: currentSavedDate
         };
 
         try {
-            const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(todayStr)}`, {
+            const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
             const existing = await checkRes.json();
@@ -152,7 +153,7 @@
             let method = "POST";
 
             if (existing && existing.length > 0) {
-                url = `${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(todayStr)}`;
+                url = `${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`;
                 method = "PATCH";
             }
 
@@ -174,7 +175,7 @@
 
     async function loadFromCloud() {
         try {
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(todayStr)}`, {
+            const res = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`, {
                 headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
             });
             const data = await res.json();
@@ -183,8 +184,8 @@
                 const log = data[0];
                 currentState = log.current_state;
                 firstInTime = log.first_in_time ? new Date(log.first_in_time) : null;
-                accumulatedActiveMs = parseFloat(log.accumulated_active_ms);
-                accumulatedBreakMs = parseFloat(log.accumulated_break_ms);
+                accumulatedActiveMs = parseFloat(log.accumulated_active_ms) || 0;
+                accumulatedBreakMs = parseFloat(log.accumulated_break_ms) || 0;
                 lastStateChangeTime = log.last_state_change_time ? new Date(log.last_state_change_time) : null;
                 document.getElementById('syncStatus').innerText = "🔗 Cloud Linked";
             } else {
@@ -293,35 +294,40 @@
             btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
         }
 
-        document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        if (firstInTime) {
+            document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        }
+        
         const now = new Date();
         let currentActiveMs = accumulatedActiveMs; let currentBreakMs = accumulatedBreakMs;
         
-        if (currentState === "ACTIVE") currentActiveMs += (now - new Date(lastStateChangeTime));
-        else if (currentState === "ON_BREAK") currentBreakMs += (now - new Date(lastStateChangeTime));
+        if (currentState === "ACTIVE" && lastStateChangeTime) currentActiveMs += (now - new Date(lastStateChangeTime));
+        else if (currentState === "ON_BREAK" && lastStateChangeTime) currentBreakMs += (now - new Date(lastStateChangeTime));
         
-        const activeMinutes = Math.floor(currentActiveMs / 60000);
-        const breakMinutes = Math.floor(currentBreakMs / 60000);
+        const activeMinutes = Math.max(0, Math.floor(currentActiveMs / 60000));
+        const breakMinutes = Math.max(0, Math.floor(currentBreakMs / 60000));
         
         document.getElementById('lblBreakTime').innerText = `${breakMinutes} mins`;
         document.getElementById('lblActiveHrs').innerText = `${Math.floor(activeMinutes / 60)}h ${activeMinutes % 60}m`;
         
-        const totalShiftDurationMs = (targetActiveMinutes * 60 * 1000) + currentBreakMs;
-        const departureTime = new Date(new Date(firstInTime).getTime() + totalShiftDurationMs);
-        
-        if (currentState === "COMPLETED") {
-            document.getElementById('timeBanner').innerText = "Shift Ended";
-            document.getElementById('countdownText').innerText = "Data archived.";
-        } else {
-            document.getElementById('timeBanner').innerText = departureTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            const timeRemainingMs = departureTime - now;
-            if (timeRemainingMs <= 0) {
-                document.getElementById('countdownText').innerText = "🎉 Goal reached! Safe to leave.";
-                document.getElementById('countdownText').style.color = "var(--success)";
+        if (firstInTime) {
+            const totalShiftDurationMs = (targetActiveMinutes * 60 * 1000) + currentBreakMs;
+            const departureTime = new Date(new Date(firstInTime).getTime() + totalShiftDurationMs);
+            
+            if (currentState === "COMPLETED") {
+                document.getElementById('timeBanner').innerText = "Shift Ended";
+                document.getElementById('countdownText').innerText = "Data archived.";
             } else {
-                const remSecs = Math.floor(timeRemainingMs / 1000);
-                document.getElementById('countdownText').innerText = `⏱️ Countdown: ${Math.floor(remSecs / 3600)}h ${Math.floor((remSecs % 3600) / 60)}m remaining`;
-                document.getElementById('countdownText').style.color = "var(--text-sub)";
+                document.getElementById('timeBanner').innerText = departureTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const timeRemainingMs = departureTime - now;
+                if (timeRemainingMs <= 0) {
+                    document.getElementById('countdownText').innerText = "🎉 Goal reached! Safe to leave.";
+                    document.getElementById('countdownText').style.color = "var(--success)";
+                } else {
+                    const remSecs = Math.floor(timeRemainingMs / 1000);
+                    document.getElementById('countdownText').innerText = `⏱️ Countdown: ${Math.floor(remSecs / 3600)}h ${Math.floor((remSecs % 3600) / 60)}m remaining`;
+                    document.getElementById('countdownText').style.color = "var(--text-sub)";
+                }
             }
         }
     }
