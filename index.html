@@ -2,343 +2,282 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Shift Tracker">
-    
-    <title>Synced Shift Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LedgerLyft - Personal Finance Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --bg-main: #0f172a;
-            --card-bg: #1e293b;
-            --primary: #3b82f6;
-            --success: #22c55e;
-            --warning: #eab308;
+            --bg-dark: #121824;
+            --bg-card: #1e2640;
+            --primary: #50c878;
+            --primary-hover: #40a860;
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --border: #2e3a59;
             --danger: #ef4444;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --border: #334155;
+            --warning: #f59e0b;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--bg-main); color: var(--text-main); padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .dashboard { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
-        .card { background-color: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-        h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-        .subtitle { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; }
-        .status-wrapper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .badge { padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-        .bg-not_started { background: #475569; color: #cbd5e1; }
-        .bg-active { background: #16a34a; color: #dcfce7; }
-        .bg-on_break { background: #ca8a04; color: #fef9c3; }
-        .bg-completed { background: #1d4ed8; color: #dbeafe; }
-        .time-display { text-align: center; margin: 12px 0; }
-        .time-banner { font-size: 36px; font-weight: 800; color: var(--primary); letter-spacing: -1px; }
-        .countdown-text { font-size: 13px; color: var(--text-sub); font-weight: 600; }
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
-        button { padding: 16px; font-size: 14px; font-weight: 700; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; }
-        button:disabled { background-color: #334155 !important; color: #64748b !important; }
-        .btn-in { background-color: var(--primary); }
-        .btn-break { background-color: var(--warning); color: #451a03; }
-        .btn-back { background-color: var(--success); }
-        .btn-off { background-color: var(--danger); grid-column: span 2; }
-        .metrics-list { background-color: rgba(15, 23, 42, 0.4); border-radius: 12px; padding: 12px 16px; margin-top: 16px; }
-        .metric-row { display: flex; justify-content: space-between; padding: 10px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
-        .metric-row:last-child { border: none; }
-        .metric-row span { color: var(--text-sub); }
-        .metric-row strong { color: var(--text-main); }
-        .sync-indicator { text-align: center; font-size: 11px; color: var(--text-sub); margin-top: 5px; }
-
-        /* Manual Correction Styling */
-        .form-group { display: flex; flex-direction: column; margin-bottom: 12px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        label { font-size: 11px; font-weight: 700; color: var(--text-sub); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
-        input { padding: 12px; font-size: 14px; border: 1px solid var(--border); border-radius: 8px; background-color: var(--bg-main); color: var(--text-main); outline: none; font-family: inherit; }
-        input:focus { border-color: var(--primary); }
-        .btn-update { width: 100%; background-color: #475569; margin-top: 8px; padding: 12px; }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: var(--bg-dark); color: var(--text-main); padding: 20px; }
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+        h1 { color: var(--primary); font-size: 24px; }
+        .btn { background: var(--primary); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 600; }
+        .btn:hover { background: var(--primary-hover); }
+        .btn-secondary { background: #4b5563; }
+        .btn-secondary:hover { background: #374151; }
+        
+        .dashboard-grid { display: grid; grid-template-columns: 300px 1fr 1fr; gap: 20px; }
+        @media (max-width: 1024px) { .dashboard-grid { grid-template-columns: 1fr; } }
+        
+        .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+        .card h2 { font-size: 18px; margin-bottom: 15px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+        
+        .select-control { width: 100%; padding: 10px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; margin-bottom: 20px; }
+        .metric-group { margin-bottom: 15px; }
+        .metric-label { font-size: 14px; color: var(--text-muted); }
+        .metric-value { font-size: 22px; font-weight: bold; margin-top: 2px; }
+        
+        textarea { width: 100%; height: 140px; background: var(--bg-dark); color: var(--text-main); border: 1px solid var(--border); border-radius: 6px; padding: 10px; resize: none; margin-bottom: 10px; }
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        .data-table th, .data-table td { text-align: left; padding: 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        .data-table th { color: var(--text-muted); font-weight: 500; }
+        
+        .autopay-item { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid var(--border); }
+        .status-badge { padding: 2px 8px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+        .status-paid { background: rgba(80, 200, 120, 0.2); color: var(--primary); }
+        .status-pending { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        .hint { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; line-height: 1.4; }
     </style>
 </head>
 <body>
 
-<div class="dashboard">
-    <div class="card">
-        <div class="status-wrapper">
-            <div>
-                <h2>Synced Shift Controller</h2>
-                <div style="font-size: 12px; color: var(--text-sub);">7.0 Hours Fixed Target</div>
-            </div>
-            <div id="statusBadge" class="badge bg-not_started">Loading...</div>
+    <header>
+        <h1>LedgerLyft</h1>
+        <div>
+            <button class="btn btn-secondary" onclick="exportBackup()">Backup Data</button>
         </div>
+    </header>
 
-        <div class="time-display">
-            <div id="timeBanner" class="time-banner">--:-- --</div>
-            <div id="countdownText" class="countdown-text">Syncing with cloud database...</div>
-        </div>
-
-        <div class="btn-grid">
-            <button id="btnIn" class="btn-in" onclick="punchIn()">☀️ First In</button>
-            <button id="btnBreak" class="btn-break" onclick="goBreak()">☕ Go Break</button>
-            <button id="btnBack" class="btn-back" onclick="returnBreak()">💻 Back In</button>
-            <button id="btnLogoff" class="btn-off" onclick="logOff()">🏁 Log Off Day</button>
-        </div>
-
-        <div class="metrics-list">
-            <div class="metric-row"><span>Arrival Clock</span><strong id="lblFirstIn">--:--</strong></div>
-            <div class="metric-row"><span>Break Gaps</span><strong id="lblBreakTime">0 mins</strong></div>
-            <div class="metric-row"><span>Active Logged</span><strong id="lblActiveHrs">0h 0m</strong></div>
-        </div>
-        <div id="syncStatus" class="sync-indicator">Checking cloud connection...</div>
-    </div>
-
-    <div class="card">
-        <h2 style="font-size: 16px; margin-bottom: 2px;">Manual Corrections</h2>
-        <div class="subtitle">Override missed logs manually</div>
+    <div class="dashboard-grid">
         
-        <div class="form-row">
-            <div class="form-group">
-                <label>First Punch In</label>
-                <input type="time" id="inputFirstIn">
+        <!-- COLUMN 1: CONTROLS & OVERVIEW -->
+        <div class="card">
+            <h2>Timeline</h2>
+            <select id="monthSelect" class="select-control" onchange="switchMonth()">
+                <!-- Populated via JS -->
+            </select>
+
+            <h2>Overview</h2>
+            <div class="metric-group">
+                <div class="metric-label">Variable Expenses (Parsed)</div>
+                <div class="metric-value" id="totalExpenses" style="color: var(--danger);">₹0</div>
             </div>
-            <div class="form-group">
-                <label>Last Punch In</label>
-                <input type="time" id="inputLastIn">
+            <div class="metric-group">
+                <div class="metric-label">Fixed Commitments (This Month)</div>
+                <div class="metric-value" id="totalFixed" style="color: var(--primary);">₹0</div>
+            </div>
+            <div class="metric-group">
+                <div class="metric-label">Combined Outflow Tracker</div>
+                <div class="metric-value" id="totalCombined" style="color: var(--warning);">₹0</div>
             </div>
         </div>
-        <div class="form-group">
-            <label>Forced Active Hours (e.g. 4.5)</label>
-            <input type="number" id="inputActiveHrs" step="0.01" placeholder="Portal decimal value">
+
+        <!-- COLUMN 2: BULK INPUT AND REGISTRY -->
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="card">
+                <h2>Bulk Monthly Input (One-Go Paste)</h2>
+                <div class="hint">Paste your random monthly expenses below. Use format: <strong>"Name Amount"</strong> (one per line).</div>
+                <textarea id="bulkPasteInput" placeholder="Groceries 4500&#10;Swiggy 1200&#10;Fuel 3000"></textarea>
+                <button class="btn" onclick="parseBulkInput()">Process & Append</button>
+            </div>
+
+            <div class="card">
+                <h2>Variable Expenses Ledger (Current Month)</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Item Name</th>
+                            <th>Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="variableTableBody"></tbody>
+                </table>
+            </div>
         </div>
-        <button class="btn-update" onclick="applyManualCorrection()">Apply Correction</button>
+
+        <!-- COLUMN 3: AUTOMATED STANDING ORDERS & VISUALS -->
+        <div style="display: flex; flex-direction: column; gap: 20px;">
+            <div class="card">
+                <h2>Standing Auto-Pay Orders</h2>
+                <div id="autoPayContainer"></div>
+            </div>
+
+            <div class="card">
+                <h2>Allocation Split</h2>
+                <div style="max-height: 200px; display:flex; justify-content:center;">
+                    <canvas id="financialChart"></canvas>
+                </div>
+            </div>
+        </div>
     </div>
-</div>
 
-<script>
-    // --- CONFIGURE YOUR SUPABASE DETAILS HERE ---
-    // Ensure URL has NO trailing slash at the end (ends in .co)
-    const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
-    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cWVxZ21nd2NkZXNlenBpdGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDk5NjAsImV4cCI6MjA5NTk4NTk2MH0.x-GI2NFVVKuw3_BBjVvFTWdk7MhBce1okeWdxTflgV4";
-    
-    const targetActiveMinutes = 7 * 60; 
-    let currentState = "NOT_STARTED"; 
-    let firstInTime = null;
-    let accumulatedActiveMs = 0;
-    let accumulatedBreakMs = 0;
-    let lastStateChangeTime = null;
-    let currentSavedDate = new Date().toDateString();
-
-    loadFromCloud();
-    setInterval(loadFromCloud, 10000); // Check database every 10 seconds
-    setInterval(updateUI, 1000);
-
-    async function saveToCloud() {
-        document.getElementById('syncStatus').innerText = "☁️ Saving changes...";
-        const payload = {
-            current_state: currentState,
-            first_in_time: firstInTime ? new Date(firstInTime).toISOString() : null,
-            accumulated_active_ms: accumulatedActiveMs,
-            accumulated_break_ms: accumulatedBreakMs,
-            last_state_change_time: lastStateChangeTime ? new Date(lastStateChangeTime).toISOString() : null,
-            date_tracked: currentSavedDate
+    <script>
+        let appState = {
+            selectedMonth: "",
+            // Your exact baseline configuration mapping
+            fixedCommitments: [
+                { name: "Home Loan Insurance (Day 1 | HDFC)", amount: 2551, type: "monthly" },
+                { name: "HDFC Home Loan (Day 3 | HDFC)", amount: 1000, type: "monthly" },
+                { name: "Mutual Fund SIP (Day 3 | Canara)", amount: 25000, type: "monthly" },
+                { name: "Jio Sim Card (Day 3 | Canara)", amount: 349, type: "monthly" },
+                { name: "Apple Pay Sub (Day 8 | HDFC)", amount: 749, type: "monthly" },
+                { name: "Airtel Black WiFi (Day 16 | Canara)", amount: 1700, type: "monthly" },
+                { name: "Term Insurance (Day 31 | Canara)", amount: 2445, type: "monthly" },
+                // Custom handling flag for exceptions
+                { name: "Airtel Yearly Mobile (Once a Year Exception)", amount: 4000, type: "yearly", activeMonth: "02" }
+            ],
+            monthlyExpenses: {} 
         };
 
-        try {
-            const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`, {
-                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+        let chartInstance = null;
+
+        window.onload = function() {
+            const data = localStorage.getItem('ledgerlyft_seeded_data');
+            if(data) appState = JSON.parse(data);
+            buildMonthSelector();
+            syncDashboardData();
+        };
+
+        function saveState() {
+            localStorage.setItem('ledgerlyft_seeded_data', JSON.stringify(appState));
+        }
+
+        function buildMonthSelector() {
+            const select = document.getElementById('monthSelect');
+            const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+            const currentYear = 2026; 
+            
+            let optionsHTML = "";
+            for(let m = 0; m < 12; m++) {
+                let monthStr = `${currentYear}-${String(m+1).padStart(2, '0')}`;
+                optionsHTML += `<option value="${monthStr}">${months[m]} ${currentYear}</option>`;
+            }
+            select.innerHTML = optionsHTML;
+            
+            // Set default month focus context
+            const d = new Date();
+            let key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2, '0')}`;
+            if (!optionsHTML.includes(key)) key = "2026-06"; 
+            select.value = key;
+            appState.selectedMonth = key;
+        }
+
+        function switchMonth() {
+            appState.selectedMonth = document.getElementById('monthSelect').value;
+            syncDashboardData();
+        }
+
+        function getActiveFixedCommitments() {
+            const targetMonthNumber = appState.selectedMonth.split("-")[1]; // extract '02', '06', etc.
+            return appState.fixedCommitments.filter(item => {
+                if (item.type === "monthly") return true;
+                if (item.type === "yearly" && item.activeMonth === targetMonthNumber) return true;
+                return false;
             });
-            const existing = await checkRes.json();
+        }
 
-            let url = `${SUPABASE_URL}/rest/v1/tracker_logs`;
-            let method = "POST";
+        function parseBulkInput() {
+            const rawText = document.getElementById('bulkPasteInput').value.trim();
+            if(!rawText) return;
 
-            if (existing && existing.length > 0) {
-                url = `${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`;
-                method = "PATCH";
+            if(!appState.monthlyExpenses[appState.selectedMonth]) {
+                appState.monthlyExpenses[appState.selectedMonth] = [];
             }
 
-            await fetch(url, {
-                method: method,
-                headers: {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${SUPABASE_KEY}`,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
+            const lines = rawText.split('\n');
+            const regex = /^(.+?)\s+(\d+(?:\.\d+)?)$/;
+            let count = 0;
+
+            lines.forEach(line => {
+                const match = line.trim().match(regex);
+                if(match) {
+                    appState.monthlyExpenses[appState.selectedMonth].push({
+                        name: match[1].trim(),
+                        amount: parseFloat(match[2])
+                    });
+                    count++;
+                }
+            });
+
+            if(count > 0) {
+                saveState();
+                syncDashboardData();
+                document.getElementById('bulkPasteInput').value = "";
+            } else {
+                alert("Format target mismatch. Use: 'ItemName Amount'");
+            }
+        }
+
+        function syncDashboardData() {
+            const currentMonthVarList = appState.monthlyExpenses[appState.selectedMonth] || [];
+            const activeFixed = getActiveFixedCommitments();
+
+            let varTotal = currentMonthVarList.reduce((s, i) => s + i.amount, 0);
+            let fixedTotal = activeFixed.reduce((s, i) => s + i.amount, 0);
+            let combinedTotal = varTotal + fixedTotal;
+
+            document.getElementById('totalExpenses').innerText = `₹${varTotal.toLocaleString('en-IN')}`;
+            document.getElementById('totalFixed').innerText = `₹${fixedTotal.toLocaleString('en-IN')}`;
+            document.getElementById('totalCombined').innerText = `₹${combinedTotal.toLocaleString('en-IN')}`;
+
+            // Render tables inline
+            const varBody = document.getElementById('variableTableBody');
+            varBody.innerHTML = currentMonthVarList.length === 0 ? '<tr><td colspan="2" style="color:var(--text-muted)">No variable entries added yet.</td></tr>' : '';
+            currentMonthVarList.forEach(item => {
+                varBody.innerHTML += `<tr><td>${item.name}</td><td>₹${item.amount.toLocaleString('en-IN')}</td></tr>`;
+            });
+
+            const autoContainer = document.getElementById('autoPayContainer');
+            autoContainer.innerHTML = "";
+            activeFixed.forEach(item => {
+                autoContainer.innerHTML += `
+                    <div class="autopay-item">
+                        <div>
+                            <div style="font-size:14px;">${item.name}</div>
+                            <div style="font-size:12px; color:var(--text-muted);">₹${item.amount.toLocaleString('en-IN')}</div>
+                        </div>
+                        <span class="status-badge status-paid">Auto-Paid</span>
+                    </div>`;
+            });
+
+            renderChart(varTotal, fixedTotal);
+        }
+
+        function renderChart(varAmt, fixedAmt) {
+            const ctx = document.getElementById('financialChart').getContext('2d');
+            if(chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Variable Expenses', 'Fixed Commitments'],
+                    datasets: [{
+                        data: [varAmt, fixedAmt],
+                        backgroundColor: ['#ef4444', '#50c878'],
+                        borderWidth: 0
+                    }]
                 },
-                body: JSON.stringify(payload)
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#f3f4f6' } } } }
             });
-            document.getElementById('syncStatus').innerText = "✅ Synchronized with Cloud";
-        } catch (err) {
-            document.getElementById('syncStatus').innerText = "❌ Sync Connection Error";
-        }
-    }
-
-    async function loadFromCloud() {
-        try {
-            const res = await fetch(`${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`, {
-                headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-            });
-            const data = await res.json();
-            
-            if (data && data.length > 0) {
-                const log = data[0];
-                currentState = log.current_state;
-                firstInTime = log.first_in_time ? new Date(log.first_in_time) : null;
-                accumulatedActiveMs = parseFloat(log.accumulated_active_ms) || 0;
-                accumulatedBreakMs = parseFloat(log.accumulated_break_ms) || 0;
-                lastStateChangeTime = log.last_state_change_time ? new Date(log.last_state_change_time) : null;
-                document.getElementById('syncStatus').innerText = "🔗 Cloud Linked";
-            } else {
-                currentState = "NOT_STARTED";
-                document.getElementById('syncStatus').innerText = "☀️ Fresh Shift Waiting";
-            }
-        } catch (e) {
-            document.getElementById('syncStatus').innerText = "⚠️ Offline Mode";
-        }
-    }
-
-    function punchIn() {
-        const now = new Date(); firstInTime = now; lastStateChangeTime = now; currentState = "ACTIVE";
-        updateUI(); saveToCloud();
-    }
-
-    function goBreak() {
-        const now = new Date(); accumulatedActiveMs += (now - new Date(lastStateChangeTime)); lastStateChangeTime = now; currentState = "ON_BREAK";
-        updateUI(); saveToCloud();
-    }
-
-    function returnBreak() {
-        const now = new Date(); accumulatedBreakMs += (now - new Date(lastStateChangeTime)); lastStateChangeTime = now; currentState = "ACTIVE";
-        updateUI(); saveToCloud();
-    }
-
-    function logOff() {
-        if(confirm("End shift?")) {
-            const now = new Date();
-            if (currentState === "ACTIVE") accumulatedActiveMs += (now - new Date(lastStateChangeTime));
-            else if (currentState === "ON_BREAK") accumulatedBreakMs += (now - new Date(lastStateChangeTime));
-            lastStateChangeTime = now; currentState = "COMPLETED";
-            updateUI(); saveToCloud();
-        }
-    }
-
-    function applyManualCorrection() {
-        const manualFirstIn = document.getElementById('inputFirstIn').value;
-        const manualLastIn = document.getElementById('inputLastIn').value;
-        const manualActiveHrs = document.getElementById('inputActiveHrs').value;
-        const todayStrPrefix = new Date().toDateString();
-
-        if (manualFirstIn) {
-            firstInTime = new Date(todayStrPrefix + " " + manualFirstIn);
         }
 
-        if (manualActiveHrs !== "") {
-            const parsedHrs = parseFloat(manualActiveHrs);
-            accumulatedActiveMs = parsedHrs * 3600 * 1000;
-            
-            if (manualLastIn) {
-                const lastInDate = new Date(todayStrPrefix + " " + manualLastIn);
-                lastStateChangeTime = lastInDate;
-                if (firstInTime) {
-                    const elapsedTimeline = lastInDate - firstInTime;
-                    accumulatedBreakMs = elapsedTimeline - accumulatedActiveMs;
-                    if(accumulatedBreakMs < 0) accumulatedBreakMs = 0;
-                }
-            } else {
-                lastStateChangeTime = new Date();
-                if (firstInTime) {
-                    const elapsedTimeline = new Date() - firstInTime;
-                    accumulatedBreakMs = elapsedTimeline - accumulatedActiveMs;
-                    if(accumulatedBreakMs < 0) accumulatedBreakMs = 0;
-                }
-            }
-            currentState = "ACTIVE";
-        } else if (manualFirstIn && manualLastIn) {
-            const firstInDate = new Date(todayStrPrefix + " " + manualFirstIn);
-            const lastInDate = new Date(todayStrPrefix + " " + manualLastIn);
-            accumulatedBreakMs = lastInDate - firstInDate;
-            accumulatedActiveMs = 0;
-            lastStateChangeTime = lastInDate;
-            currentState = "ACTIVE";
+        function exportBackup() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+            const dl = document.createElement('a');
+            dl.setAttribute("href", dataStr);
+            dl.setAttribute("download", `ledgerlyft_data.json`);
+            dl.click();
         }
-
-        updateUI();
-        saveToCloud();
-        alert("Timelines synced across all platforms!");
-    }
-
-    function updateUI() {
-        checkAndResetNewDay();
-        
-        const btnIn = document.getElementById('btnIn'); const btnBreak = document.getElementById('btnBreak');
-        const btnBack = document.getElementById('btnBack'); const btnLogoff = document.getElementById('btnLogoff');
-        const badge = document.getElementById('statusBadge');
-        
-        if (currentState === "NOT_STARTED") {
-            badge.innerText = "Not Started"; badge.className = "badge bg-not_started";
-            btnIn.disabled = false; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
-            document.getElementById('lblFirstIn').innerText = "--:--";
-            document.getElementById('lblBreakTime').innerText = "0 mins";
-            document.getElementById('lblActiveHrs').innerText = "0h 0m";
-            document.getElementById('timeBanner').innerText = "--:-- --";
-            document.getElementById('countdownText').innerText = "Tap First In to start tracking";
-            return;
-        } else if (currentState === "ACTIVE") {
-            badge.innerText = "Active"; badge.className = "badge bg-active";
-            btnIn.disabled = true; btnBreak.disabled = false; btnBack.disabled = true; btnLogoff.disabled = false;
-        } else if (currentState === "ON_BREAK") {
-            badge.innerText = "On Break"; badge.className = "badge bg-on_break";
-            btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = false; btnLogoff.disabled = false;
-        } else if (currentState === "COMPLETED") {
-            badge.innerText = "Ended"; badge.className = "badge bg-completed";
-            btnIn.disabled = true; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true;
-        }
-
-        if (firstInTime) {
-            document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        }
-        
-        const now = new Date();
-        let currentActiveMs = accumulatedActiveMs; let currentBreakMs = accumulatedBreakMs;
-        
-        if (currentState === "ACTIVE" && lastStateChangeTime) currentActiveMs += (now - new Date(lastStateChangeTime));
-        else if (currentState === "ON_BREAK" && lastStateChangeTime) currentBreakMs += (now - new Date(lastStateChangeTime));
-        
-        const activeMinutes = Math.max(0, Math.floor(currentActiveMs / 60000));
-        const breakMinutes = Math.max(0, Math.floor(currentBreakMs / 60000));
-        
-        document.getElementById('lblBreakTime').innerText = `${breakMinutes} mins`;
-        document.getElementById('lblActiveHrs').innerText = `${Math.floor(activeMinutes / 60)}h ${activeMinutes % 60}m`;
-        
-        if (firstInTime) {
-            const totalShiftDurationMs = (targetActiveMinutes * 60 * 1000) + currentBreakMs;
-            const departureTime = new Date(new Date(firstInTime).getTime() + totalShiftDurationMs);
-            
-            if (currentState === "COMPLETED") {
-                document.getElementById('timeBanner').innerText = "Shift Ended";
-                document.getElementById('countdownText').innerText = "Data archived.";
-            } else {
-                document.getElementById('timeBanner').innerText = departureTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                const timeRemainingMs = departureTime - now;
-                if (timeRemainingMs <= 0) {
-                    document.getElementById('countdownText').innerText = "🎉 Goal reached! Safe to leave.";
-                    document.getElementById('countdownText').style.color = "var(--success)";
-                } else {
-                    const remSecs = Math.floor(timeRemainingMs / 1000);
-                    document.getElementById('countdownText').innerText = `⏱️ Countdown: ${Math.floor(remSecs / 3600)}h ${Math.floor((remSecs % 3600) / 60)}m remaining`;
-                    document.getElementById('countdownText').style.color = "var(--text-sub)";
-                }
-            }
-        }
-    }
-
-    function checkAndResetNewDay() {
-        const todayStrCheck = new Date().toDateString();
-        if (currentSavedDate && currentSavedDate !== todayStrCheck) {
-            currentState = "NOT_STARTED"; firstInTime = null; accumulatedActiveMs = 0; accumulatedBreakMs = 0; lastStateChangeTime = null;
-            currentSavedDate = todayStrCheck;
-        }
-    }
-</script>
+    </script>
 </body>
 </html>
