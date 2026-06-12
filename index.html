@@ -432,16 +432,18 @@
         let liveActiveMs = accumulatedActiveMs;
         let liveBreakMs  = accumulatedBreakMs;
 
-        // FIXED: Only add time if the last state change happened AFTER the last background scrape time
+        // FIXED: The background script already pushes your full day's active hours total.
+        // We ONLY add extra live milliseconds if time has passed since the script last ran.
         if (lastStateChangeTime) {
-            const stateChangeTs = new Date(lastStateChangeTime).getTime();
-            // If we are active, calculate time moving forward from the current live session baseline
-            if (currentState === "ACTIVE" && now.getTime() > stateChangeTs) {
-                // To prevent double-counting, we only add the time that has passed *since* your last sync update
-                liveActiveMs += Math.max(0, now.getTime() - stateChangeTs);
+            const lastSyncTs = new Date(lastStateChangeTime).getTime();
+            
+            // Only increment if you are currently ACTIVE and your system clock is past the last sync timestamp
+            if (currentState === "ACTIVE" && now.getTime() > lastSyncTs) {
+                // We calculate time passed strictly from right now down to the last sync window anchor
+                liveActiveMs += (now.getTime() - lastSyncTs);
             }
-            if (currentState === "ON_BREAK" && now.getTime() > stateChangeTs) {
-                liveBreakMs += Math.max(0, now.getTime() - stateChangeTs);
+            if (currentState === "ON_BREAK" && now.getTime() > lastSyncTs) {
+                liveBreakMs += (now.getTime() - lastSyncTs);
             }
         }
 
