@@ -431,19 +431,8 @@
         const now = new Date();
         let liveActiveMs = accumulatedActiveMs;
         let liveBreakMs  = accumulatedBreakMs;
-
-        // FIXED: Only add live passing minutes since the last background sync ran
-        if (lastStateChangeTime) {
-            const lastSyncTs = new Date(lastStateChangeTime).getTime();
-            
-            if (currentState === "ACTIVE" && now.getTime() > lastSyncTs) {
-                // Only calculate the time that has passed since your last punch-in anchor
-                liveActiveMs += (now.getTime() - lastSyncTs);
-            }
-            if (currentState === "ON_BREAK" && now.getTime() > lastSyncTs) {
-                liveBreakMs += (now.getTime() - lastSyncTs);
-            }
-        }
+        if (currentState === "ACTIVE"   && lastStateChangeTime) liveActiveMs += (now - new Date(lastStateChangeTime));
+        if (currentState === "ON_BREAK" && lastStateChangeTime) liveBreakMs  += (now - new Date(lastStateChangeTime));
 
         const activeMin = Math.max(0, Math.floor(liveActiveMs / 60000));
         const breakMin  = Math.max(0, Math.floor(liveBreakMs  / 60000));
