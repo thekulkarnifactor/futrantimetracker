@@ -1,190 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Shift Tracker">
-    <title>Synced Shift Dashboard</title>
-    <style>
-        :root {
-            --bg-main: #0f172a;
-            --card-bg: #1e293b;
-            --primary: #3b82f6;
-            --success: #22c55e;
-            --warning: #eab308;
-            --danger: #ef4444;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --border: #334155;
-        }
-
-        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--bg-main); color: var(--text-main); padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
-        .dashboard { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 16px; }
-        .card { background-color: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
-
-        h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-        .subtitle { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; }
-        .status-wrapper { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .badge { padding: 6px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; text-transform: uppercase; }
-        .bg-not_started { background: #475569; color: #cbd5e1; }
-        .bg-active      { background: #16a34a; color: #dcfce7; }
-        .bg-on_break    { background: #ca8a04; color: #fef9c3; }
-        .bg-completed   { background: #1d4ed8; color: #dbeafe; }
-
-        .time-display { text-align: center; margin: 12px 0; }
-        .time-banner  { font-size: 36px; font-weight: 800; color: var(--primary); letter-spacing: -1px; }
-        .countdown-text { font-size: 13px; color: var(--text-sub); font-weight: 600; }
-
-        .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 8px; }
-        button { padding: 16px; font-size: 14px; font-weight: 700; color: #ffffff; border: none; border-radius: 12px; cursor: pointer; transition: opacity 0.15s; }
-        button:active:not(:disabled) { opacity: 0.8; }
-        button:disabled { background-color: #334155 !important; color: #64748b !important; cursor: not-allowed; }
-        .btn-in    { background-color: var(--primary); }
-        .btn-break { background-color: var(--warning); color: #451a03; }
-        .btn-back  { background-color: var(--success); }
-        .btn-off   { background-color: var(--danger); grid-column: span 2; }
-
-        .metrics-list { background-color: rgba(15,23,42,0.4); border-radius: 12px; padding: 12px 16px; margin-top: 16px; }
-        .metric-row { display: flex; justify-content: space-between; padding: 10px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
-        .metric-row:last-child { border: none; }
-        .metric-row span   { color: var(--text-sub); }
-        .metric-row strong { color: var(--text-main); }
-        .sync-indicator { text-align: center; font-size: 11px; color: var(--text-sub); margin-top: 5px; }
-
-        /* ── Correction card ── */
-        .field-block { margin-bottom: 14px; }
-        .field-label {
-            font-size: 11px; font-weight: 700; color: var(--text-sub);
-            text-transform: uppercase; letter-spacing: 0.6px;
-            margin-bottom: 6px; display: block;
-        }
-        .field-hint {
-            font-size: 11px; color: #475569; margin-bottom: 6px; display: block;
-        }
-        input[type="time"],
-        input[type="number"] {
-            width: 100%; padding: 13px 14px; font-size: 15px; font-weight: 600;
-            border: 1px solid var(--border); border-radius: 10px;
-            background-color: var(--bg-main); color: var(--text-main);
-            outline: none; font-family: inherit;
-        }
-        input:focus { border-color: var(--primary); }
-
-        .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-
-        .btn-apply {
-            width: 100%; padding: 15px; font-size: 15px; font-weight: 700;
-            background-color: var(--primary); color: #fff;
-            border: none; border-radius: 12px; cursor: pointer;
-            margin-top: 4px;
-        }
-        .btn-apply:active { opacity: 0.85; }
-
-        /* Result summary shown after apply */
-        #correctionResult {
-            display: none;
-            margin-top: 14px;
-            background: rgba(34,197,94,0.08);
-            border: 1px solid rgba(34,197,94,0.2);
-            border-radius: 10px;
-            padding: 12px 14px;
-        }
-        .res-row { display: flex; justify-content: space-between; font-size: 13px; padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
-        .res-row:last-child { border: none; }
-        .res-row span  { color: var(--text-sub); }
-        .res-row strong { color: var(--text-main); }
-        .res-title { font-size: 12px; font-weight: 700; color: var(--success); margin-bottom: 8px; }
-    </style>
-</head>
-<body>
-<div class="dashboard">
-
-    <!-- ── Main controller ── -->
-    <div class="card">
-        <div class="status-wrapper">
-            <div>
-                <h2>Synced Shift Controller</h2>
-                <div style="font-size:12px;color:var(--text-sub);">7.0 Hours Fixed Target</div>
-            </div>
-            <div id="statusBadge" class="badge bg-not_started">Loading...</div>
-        </div>
-
-        <div class="time-display">
-            <div id="timeBanner" class="time-banner">--:-- --</div>
-            <div id="countdownText" class="countdown-text">Syncing with cloud database...</div>
-        </div>
-
-        <div class="btn-grid">
-            <button id="btnIn"     class="btn-in"    onclick="punchIn()">☀️ First In</button>
-            <button id="btnBreak"  class="btn-break" onclick="goBreak()">☕ Go Break</button>
-            <button id="btnBack"   class="btn-back"  onclick="returnBreak()">💻 Back In</button>
-            <button id="btnLogoff" class="btn-off"   onclick="logOff()">🏁 Log Off Day</button>
-        </div>
-
-        <div class="metrics-list">
-            <div class="metric-row"><span>Arrival Clock</span><strong id="lblFirstIn">--:--</strong></div>
-            <div class="metric-row"><span>Break Gaps</span><strong id="lblBreakTime">0 mins</strong></div>
-            <div class="metric-row"><span>Active Logged</span><strong id="lblActiveHrs">0h 0m</strong></div>
-        </div>
-        <div id="syncStatus" class="sync-indicator">Checking cloud connection...</div>
-    </div>
-
-    <!-- ── Manual Correction card ── -->
-    <div class="card">
-        <h2 style="font-size:16px;margin-bottom:2px;">Quick Correction</h2>
-        <div class="subtitle">3 values from the portal — that's all you need</div>
-
-        <!-- Row 1: First In + Last In -->
-        <div class="fields-row">
-            <div>
-                <span class="field-label">First In</span>
-                <span class="field-hint">Your earliest IN swipe</span>
-                <input type="time" id="inputFirstIn" step="1">
-            </div>
-            <div>
-                <span class="field-label">Last In</span>
-                <span class="field-hint">Your most recent IN swipe</span>
-                <input type="time" id="inputLastIn" step="1">
-            </div>
-        </div>
-
-        <!-- Row 2: Portal active total -->
-        <div class="field-block">
-            <span class="field-label">Portal Active Hours</span>
-            <span class="field-hint">The "Total" shown on portal — convert to decimal &nbsp;·&nbsp; e.g. 01:47 hrs → type 1.783</span>
-            <input type="number" id="inputActiveHrs" step="0.001" min="0" max="24" placeholder="e.g.  1.783">
-        </div>
-
-        <!-- HH:MM helper -->
-        <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
-            <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">HH:MM → Decimal converter</div>
-            <div style="display:flex;align-items:center;gap:8px;">
-                <input type="time" id="convertInput" style="flex:1;font-size:14px;padding:8px 10px;" oninput="liveConvert()" placeholder="01:47">
-                <span style="color:var(--text-sub);font-size:13px;">=</span>
-                <span id="convertResult" style="font-size:15px;font-weight:700;color:var(--text-main);min-width:60px;">--</span>
-                <button onclick="useConvertedValue()" style="padding:8px 12px;font-size:12px;font-weight:700;background:#1e40af;border-radius:8px;color:#fff;border:none;cursor:pointer;">Use ↑</button>
-            </div>
-        </div>
-
-        <button class="btn-apply" onclick="applyCorrection()">Apply & Sync</button>
-
-        <!-- Result summary -->
-        <div id="correctionResult">
-            <div class="res-title">✅ Applied — live timer running</div>
-            <div class="res-row"><span>First arrival</span><strong id="resFirstIn">—</strong></div>
-            <div class="res-row"><span>Last punch-in</span><strong id="resLastIn">—</strong></div>
-            <div class="res-row"><span>Active logged</span><strong id="resActive">—</strong></div>
-            <div class="res-row"><span>Break gaps</span><strong id="resBreak">—</strong></div>
-        </div>
-    </div>
-
-</div>
-
-<script>
-    const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
+const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
     const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cWVxZ21nd2NkZXNlenBpdGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDk5NjAsImV4cCI6MjA5NTk4NTk2MH0.x-GI2NFVVKuw3_BBjVvFTWdk7MhBce1okeWdxTflgV4";
 
     const targetActiveMinutes = 7 * 60;
@@ -194,9 +8,10 @@
     let accumulatedBreakMs  = 0;
     let lastStateChangeTime = null;
     let currentSavedDate    = new Date().toDateString();
+    let isManualOverride    = false; // Holds systemic state lock local info
 
     loadFromCloud();
-    setInterval(loadFromCloud, 10000);
+    setInterval(loadFromCloud, 10000); // Ticks updates downwards from automated daemon shifts
     setInterval(updateUI, 1000);
 
     // ── Cloud sync ────────────────────────────────────────────────────────────
@@ -208,7 +23,8 @@
             accumulated_active_ms:  accumulatedActiveMs,
             accumulated_break_ms:   accumulatedBreakMs,
             last_state_change_time: lastStateChangeTime   ? new Date(lastStateChangeTime).toISOString()  : null,
-            date_tracked:           currentSavedDate
+            date_tracked:           currentSavedDate,
+            is_manual_override:     isManualOverride // Informs Python daemon worker to look elsewhere
         };
         try {
             const chk = await fetch(
@@ -243,14 +59,21 @@
             const data = await res.json();
             if (data?.length > 0) {
                 const log = data[0];
+                
+                // Keep tracks of system manual block attributes
+                isManualOverride = log.is_manual_override || false; 
+
                 currentState            = log.current_state;
                 firstInTime             = log.first_in_time            ? new Date(log.first_in_time)           : null;
                 accumulatedActiveMs     = parseFloat(log.accumulated_active_ms)  || 0;
                 accumulatedBreakMs      = parseFloat(log.accumulated_break_ms)   || 0;
                 lastStateChangeTime     = log.last_state_change_time   ? new Date(log.last_state_change_time)  : null;
-                document.getElementById('syncStatus').innerText = "🔗 Cloud Linked";
+                
+                let sourceIndicator = isManualOverride ? "🔒 Manual Locked" : "🤖 Auto Synced";
+                document.getElementById('syncStatus').innerText = `🔗 Cloud Linked (${sourceIndicator})`;
             } else {
                 currentState = "NOT_STARTED";
+                isManualOverride = false;
                 document.getElementById('syncStatus').innerText = "☀️ Fresh Shift Waiting";
             }
         } catch {
@@ -258,20 +81,24 @@
         }
     }
 
-    // ── Shift buttons ─────────────────────────────────────────────────────────
+    // ── Shift buttons (Trigger manual tracking lock status seamlessly) ────────
+    // If you tap buttons explicitly, we assume control must remain locked locally.
     function punchIn() {
         const now = new Date();
+        isManualOverride = true;
         firstInTime = now; lastStateChangeTime = now; currentState = "ACTIVE";
         updateUI(); saveToCloud();
     }
     function goBreak() {
         const now = new Date();
+        isManualOverride = true;
         accumulatedActiveMs += (now - new Date(lastStateChangeTime));
         lastStateChangeTime = now; currentState = "ON_BREAK";
         updateUI(); saveToCloud();
     }
     function returnBreak() {
         const now = new Date();
+        isManualOverride = true;
         accumulatedBreakMs += (now - new Date(lastStateChangeTime));
         lastStateChangeTime = now; currentState = "ACTIVE";
         updateUI(); saveToCloud();
@@ -279,6 +106,7 @@
     function logOff() {
         if (!confirm("End shift?")) return;
         const now = new Date();
+        isManualOverride = true;
         if      (currentState === "ACTIVE")   accumulatedActiveMs += (now - new Date(lastStateChangeTime));
         else if (currentState === "ON_BREAK") accumulatedBreakMs  += (now - new Date(lastStateChangeTime));
         lastStateChangeTime = now; currentState = "COMPLETED";
@@ -287,7 +115,7 @@
 
     // ── HH:MM converter ───────────────────────────────────────────────────────
     function liveConvert() {
-        const val = document.getElementById('convertInput').value; // "HH:MM"
+        const val = document.getElementById('convertInput').value;
         if (!val) { document.getElementById('convertResult').innerText = "--"; return; }
         const [hh, mm] = val.split(':').map(Number);
         if (isNaN(hh) || isNaN(mm)) { document.getElementById('convertResult').innerText = "--"; return; }
@@ -301,7 +129,7 @@
         document.getElementById('inputActiveHrs').value = result;
     }
 
-    // ── Apply correction ──────────────────────────────────────────────────────
+    // ── Apply Quick Manual Correction ──────────────────────────────────────────
     function applyCorrection() {
         const rawFirstIn   = document.getElementById('inputFirstIn').value;
         const rawLastIn    = document.getElementById('inputLastIn').value;
@@ -314,29 +142,21 @@
 
         const todayPrefix = new Date().toDateString() + " ";
 
-        // 1. firstInTime — where the whole shift started
+        // Activating manual override stops background daemon updates instantly
+        isManualOverride = true;
+
         firstInTime = new Date(todayPrefix + rawFirstIn);
-
-        // 2. lastStateChangeTime — the live clock ticks forward from this point
-        lastStateChangeTime = rawLastIn
-            ? new Date(todayPrefix + rawLastIn)
-            : new Date();   // if no last-in provided, tick from now
-
-        // 3. accumulatedActiveMs — exactly what the portal says
+        lastStateChangeTime = rawLastIn ? new Date(todayPrefix + rawLastIn) : new Date();
         accumulatedActiveMs = parseFloat(rawActiveHrs) * 3600 * 1000;
 
-        // 4. accumulatedBreakMs — auto-derived:
-        //    total wall clock from firstIn → lastIn, minus the active time
         const wallClockMs = lastStateChangeTime - firstInTime;
         accumulatedBreakMs = Math.max(0, wallClockMs - accumulatedActiveMs);
-
-        // 5. Force ACTIVE so countdown resumes ticking from lastStateChangeTime
         currentState = "ACTIVE";
 
         updateUI();
         saveToCloud();
 
-        // Show confirmation summary
+        // Render confirmation UI metrics
         const fmtMin = ms => {
             const m = Math.floor(ms / 60000);
             return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`;
@@ -349,7 +169,7 @@
         document.getElementById('correctionResult').style.display = 'block';
     }
 
-    // ── UI renderer (1-second tick) ───────────────────────────────────────────
+    // ── UI renderer (1-second tick loop) ──────────────────────────────────────
     function updateUI() {
         checkAndResetNewDay();
 
@@ -366,14 +186,14 @@
             document.getElementById('lblBreakTime').innerText  = "0 mins";
             document.getElementById('lblActiveHrs').innerText  = "0h 0m";
             document.getElementById('timeBanner').innerText    = "--:-- --";
-            document.getElementById('countdownText').innerText = "Tap First In to start tracking";
+            document.getElementById('countdownText').innerText = "Tracking ready (Auto/Manual)";
             document.getElementById('countdownText').style.color = "var(--text-sub)";
             return;
         }
 
-        if      (currentState === "ACTIVE")    { badge.innerText = "Active";   badge.className = "badge bg-active";    btnIn.disabled=true;  btnBreak.disabled=false; btnBack.disabled=true;  btnLogoff.disabled=false; }
+        if      (currentState === "ACTIVE")    { badge.innerText = "Active";    badge.className = "badge bg-active";    btnIn.disabled=true;  btnBreak.disabled=false; btnBack.disabled=true;  btnLogoff.disabled=false; }
         else if (currentState === "ON_BREAK")  { badge.innerText = "On Break"; badge.className = "badge bg-on_break";  btnIn.disabled=true;  btnBreak.disabled=true;  btnBack.disabled=false; btnLogoff.disabled=false; }
-        else if (currentState === "COMPLETED") { badge.innerText = "Ended";    badge.className = "badge bg-completed"; btnIn.disabled=true;  btnBreak.disabled=true;  btnBack.disabled=true;  btnLogoff.disabled=true;  }
+        else if (currentState === "COMPLETED") { badge.innerText = "Ended";     badge.className = "badge bg-completed"; btnIn.disabled=true;  btnBreak.disabled=true;  btnBack.disabled=true;  btnLogoff.disabled=true;  }
 
         if (firstInTime) {
             document.getElementById('lblFirstIn').innerText =
@@ -424,9 +244,7 @@
         if (currentSavedDate && currentSavedDate !== today) {
             currentState = "NOT_STARTED"; firstInTime = null;
             accumulatedActiveMs = 0; accumulatedBreakMs = 0; lastStateChangeTime = null;
+            isManualOverride = false;
             currentSavedDate = today;
         }
     }
-</script>
-</body>
-</html>
