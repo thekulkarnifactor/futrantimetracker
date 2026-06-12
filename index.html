@@ -83,7 +83,6 @@
         }
         .btn-apply:active { opacity: 0.85; }
 
-        /* Result summary shown after apply */
         #correctionResult {
             display: none;
             margin-top: 14px;
@@ -102,7 +101,6 @@
 <body>
 <div class="dashboard">
 
-    <!-- ── Main controller ── -->
     <div class="card">
         <div class="status-wrapper">
             <div>
@@ -135,12 +133,10 @@
         <div id="syncStatus" class="sync-indicator">Checking cloud connection...</div>
     </div>
 
-    <!-- ── Manual Correction card ── -->
     <div class="card">
         <h2 style="font-size:16px;margin-bottom:2px;">Quick Correction</h2>
         <div class="subtitle">3 values from the portal — that's all you need</div>
 
-        <!-- Row 1: First In + Last In -->
         <div class="fields-row">
             <div>
                 <span class="field-label">First In</span>
@@ -154,14 +150,12 @@
             </div>
         </div>
 
-        <!-- Row 2: Portal active total -->
         <div class="field-block">
             <span class="field-label">Portal Active Hours</span>
             <span class="field-hint">The "Total" shown on portal — convert to decimal &nbsp;·&nbsp; e.g. 01:47 hrs → type 1.783</span>
             <input type="number" id="inputActiveHrs" step="0.001" min="0" max="24" placeholder="e.g.  1.783">
         </div>
 
-        <!-- HH:MM helper -->
         <div style="background:rgba(59,130,246,0.06);border:1px solid rgba(59,130,246,0.15);border-radius:8px;padding:10px 12px;margin-bottom:14px;">
             <div style="font-size:11px;font-weight:700;color:var(--primary);margin-bottom:6px;text-transform:uppercase;letter-spacing:0.5px;">HH:MM → Decimal converter</div>
             <div style="display:flex;align-items:center;gap:8px;">
@@ -174,7 +168,6 @@
 
         <button class="btn-apply" onclick="applyCorrection()">Apply & Sync</button>
 
-        <!-- Result summary -->
         <div id="correctionResult">
             <div class="res-title">✅ Applied — live timer running</div>
             <div class="res-row"><span>First arrival</span><strong id="resFirstIn">—</strong></div>
@@ -196,11 +189,12 @@
     let accumulatedActiveMs = 0;
     let accumulatedBreakMs  = 0;
     let lastStateChangeTime = null;
+    let lastScrapedAt       = null; // Crucial tracking anchor
     let currentSavedDate    = new Date().toDateString();
-    let isManualOverride    = false; // Holds systemic state lock local info
+    let isManualOverride    = false;
 
     loadFromCloud();
-    setInterval(loadFromCloud, 10000); // Ticks updates downwards from automated daemon shifts
+    setInterval(loadFromCloud, 10000); 
     setInterval(updateUI, 1000);
 
     // ── Cloud sync ────────────────────────────────────────────────────────────
@@ -213,7 +207,8 @@
             accumulated_break_ms:   accumulatedBreakMs,
             last_state_change_time: lastStateChangeTime   ? new Date(lastStateChangeTime).toISOString()  : null,
             date_tracked:           currentSavedDate,
-            is_manual_override:     isManualOverride // Informs Python daemon worker to look elsewhere
+            is_manual_override:     isManualOverride,
+            last_scraped_at:        new Date().toISOString() // Anchor matching manual inputs
         };
         try {
             const chk = await fetch(
@@ -249,14 +244,13 @@
             if (data?.length > 0) {
                 const log = data[0];
                 
-                // Keep tracks of system manual block attributes
                 isManualOverride = log.is_manual_override || false; 
-
                 currentState            = log.current_state;
                 firstInTime             = log.first_in_time            ? new Date(log.first_in_time)           : null;
                 accumulatedActiveMs     = parseFloat(log.accumulated_active_ms)  || 0;
                 accumulatedBreakMs      = parseFloat(log.accumulated_break_ms)   || 0;
                 lastStateChangeTime     = log.last_state_change_time   ? new Date(log.last_state_change_time)  : null;
+                lastScrapedAt           = log.last_scraped_at          ? new Date(log.last_scraped_at)         : null;
                 
                 let sourceIndicator = isManualOverride ? "🔒 Manual Locked" : "🤖 Auto Synced";
                 document.getElementById('syncStatus').innerText = `🔗 Cloud Linked (${sourceIndicator})`;
@@ -270,35 +264,36 @@
         }
     }
 
-    // ── Shift buttons (Trigger manual tracking lock status seamlessly) ────────
-    // If you tap buttons explicitly, we assume control must remain locked locally.
+    // ── Shift buttons ─────────────────────────────────────────────────────────
     function punchIn() {
         const now = new Date();
         isManualOverride = true;
-        firstInTime = now; lastStateChangeTime = now; currentState = "ACTIVE";
+        firstInTime = now; lastStateChangeTime = now; lastScrapedAt = now; currentState = "ACTIVE";
         updateUI(); saveToCloud();
     }
     function goBreak() {
         const now = new Date();
         isManualOverride = true;
-        accumulatedActiveMs += (now - new Date(lastStateChangeTime));
-        lastStateChangeTime = now; currentState = "ON_BREAK";
+        if (lastScrapedAt) accumulatedActiveMs += (now - lastScrapedAt);
+        lastStateChangeTime = now; lastScrapedAt = now; currentState = "ON_BREAK";
         updateUI(); saveToCloud();
     }
     function returnBreak() {
         const now = new Date();
         isManualOverride = true;
-        accumulatedBreakMs += (now - new Date(lastStateChangeTime));
-        lastStateChangeTime = now; currentState = "ACTIVE";
+        if (lastScrapedAt) accumulatedBreakMs += (now - lastScrapedAt);
+        lastStateChangeTime = now; lastScrapedAt = now; currentState = "ACTIVE";
         updateUI(); saveToCloud();
     }
     function logOff() {
         if (!confirm("End shift?")) return;
         const now = new Date();
         isManualOverride = true;
-        if      (currentState === "ACTIVE")   accumulatedActiveMs += (now - new Date(lastStateChangeTime));
-        else if (currentState === "ON_BREAK") accumulatedBreakMs  += (now - new Date(lastStateChangeTime));
-        lastStateChangeTime = now; currentState = "COMPLETED";
+        if (lastScrapedAt) {
+            if      (currentState === "ACTIVE")   accumulatedActiveMs += (now - lastScrapedAt);
+            else if (currentState === "ON_BREAK") accumulatedBreakMs  += (now - lastScrapedAt);
+        }
+        lastStateChangeTime = now; lastScrapedAt = now; currentState = "COMPLETED";
         updateUI(); saveToCloud();
     }
 
@@ -318,41 +313,32 @@
         document.getElementById('inputActiveHrs').value = result;
     }
 
-    // ── Clear Manual Override & Re-enable Python Daemon Scraper ───────────────
+    // ── Clear Manual Override ────────────────────────────────────────────────
     async function clearOverride() {
         if (!confirm("Re-enable automated background sync for today? This will clear temporary manual shifts.")) return;
         
         document.getElementById('syncStatus').innerText = "☁️ Unlocking sync...";
-        isManualOverride = false; // Reset local state parameter flag
+        isManualOverride = false;
 
-        const payload = {
-            is_manual_override: false
-        };
-
+        const payload = { is_manual_override: false };
         try {
-            // Target today's logging record inside your Supabase cluster table layout matrix
             const url = `${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`;
-            
             const response = await fetch(url, {
                 method: "PATCH",
                 headers: {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${SUPABASE_KEY}`,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
+                    "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Content-Type": "application/json", "Prefer": "return=minimal"
                 },
                 body: JSON.stringify(payload)
             });
 
             if (response.ok) {
                 document.getElementById('syncStatus').innerText = "🤖 Auto-Sync Unlocked!";
-                // Instantly download the freshly calculated clean data metrics from your backend cluster
                 await loadFromCloud();
             } else {
                 document.getElementById('syncStatus').innerText = "❌ Database Unlock Failed";
             }
         } catch (error) {
-            console.error("Sync Reset Error:", error);
             document.getElementById('syncStatus').innerText = "❌ Connection Error";
         }
     }
@@ -369,12 +355,11 @@
         }
 
         const todayPrefix = new Date().toDateString() + " ";
-
-        // Activating manual override stops background daemon updates instantly
         isManualOverride = true;
 
         firstInTime = new Date(todayPrefix + rawFirstIn);
         lastStateChangeTime = rawLastIn ? new Date(todayPrefix + rawLastIn) : new Date();
+        lastScrapedAt = new Date(); 
         accumulatedActiveMs = parseFloat(rawActiveHrs) * 3600 * 1000;
 
         const wallClockMs = lastStateChangeTime - firstInTime;
@@ -384,7 +369,6 @@
         updateUI();
         saveToCloud();
 
-        // Render confirmation UI metrics
         const fmtMin = ms => {
             const m = Math.floor(ms / 60000);
             return m >= 60 ? `${Math.floor(m/60)}h ${m%60}m` : `${m}m`;
@@ -432,16 +416,18 @@
         let liveActiveMs = accumulatedActiveMs;
         let liveBreakMs  = accumulatedBreakMs;
 
-        // FIXED: Only add live passing minutes since the last background sync ran
-        if (lastStateChangeTime) {
-            const lastSyncTs = new Date(lastStateChangeTime).getTime();
-            
-            if (currentState === "ACTIVE" && now.getTime() > lastSyncTs) {
-                // Only calculate the time that has passed since your last punch-in anchor
-                liveActiveMs += (now.getTime() - lastSyncTs);
-            }
-            if (currentState === "ON_BREAK" && now.getTime() > lastSyncTs) {
-                liveBreakMs += (now.getTime() - lastSyncTs);
+        // FIXED CRITICAL CALCULATION BOUNDARY: Live tickers increment cleanly 
+        // relative to the exact background script update timestamp ('lastScrapedAt')
+        const trackingAnchor = isManualOverride ? lastStateChangeTime : lastScrapedAt;
+
+        if (trackingAnchor) {
+            const anchorTs = new Date(trackingAnchor).getTime();
+            if (now.getTime() > anchorTs) {
+                if (currentState === "ACTIVE") {
+                    liveActiveMs += (now.getTime() - anchorTs);
+                } else if (currentState === "ON_BREAK") {
+                    liveBreakMs += (now.getTime() - anchorTs);
+                }
             }
         }
 
@@ -483,7 +469,7 @@
         if (currentSavedDate && currentSavedDate !== today) {
             currentState = "NOT_STARTED"; firstInTime = null;
             accumulatedActiveMs = 0; accumulatedBreakMs = 0; lastStateChangeTime = null;
-            isManualOverride = false;
+            lastScrapedAt = null; isManualOverride = false;
             currentSavedDate = today;
         }
     }
