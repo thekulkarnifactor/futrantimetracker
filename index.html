@@ -121,6 +121,9 @@
             <button id="btnIn"     class="btn-in"    onclick="punchIn()">☀️ First In</button>
             <button id="btnBreak"  class="btn-break" onclick="goBreak()">☕ Go Break</button>
             <button id="btnBack"   class="btn-back"  onclick="returnBreak()">💻 Back In</button>
+            
+            <button id="btnResetSync" style="background-color: #475569; grid-column: span 2;" onclick="clearOverride()">🔄 Reset Auto-Sync</button>
+            
             <button id="btnLogoff" class="btn-off"   onclick="logOff()">🏁 Log Off Day</button>
         </div>
 
@@ -313,6 +316,45 @@
         const result = document.getElementById('convertResult').innerText;
         if (result === "--") return;
         document.getElementById('inputActiveHrs').value = result;
+    }
+
+    // ── Clear Manual Override & Re-enable Python Daemon Scraper ───────────────
+    async function clearOverride() {
+        if (!confirm("Re-enable automated background sync for today? This will clear temporary manual shifts.")) return;
+        
+        document.getElementById('syncStatus').innerText = "☁️ Unlocking sync...";
+        isManualOverride = false; // Reset local state parameter flag
+
+        const payload = {
+            is_manual_override: false
+        };
+
+        try {
+            // Target today's logging record inside your Supabase cluster table layout matrix
+            const url = `${SUPABASE_URL}/rest/v1/tracker_logs?date_tracked=eq.${encodeURIComponent(currentSavedDate)}`;
+            
+            const response = await fetch(url, {
+                method: "PATCH",
+                headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": `Bearer ${SUPABASE_KEY}`,
+                    "Content-Type": "application/json",
+                    "Prefer": "return=minimal"
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                document.getElementById('syncStatus').innerText = "🤖 Auto-Sync Unlocked!";
+                // Instantly download the freshly calculated clean data metrics from your backend cluster
+                await loadFromCloud();
+            } else {
+                document.getElementById('syncStatus').innerText = "❌ Database Unlock Failed";
+            }
+        } catch (error) {
+            console.error("Sync Reset Error:", error);
+            document.getElementById('syncStatus').innerText = "❌ Connection Error";
+        }
     }
 
     // ── Apply Quick Manual Correction ──────────────────────────────────────────
