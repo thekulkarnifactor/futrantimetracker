@@ -389,8 +389,19 @@
         const now = new Date();
         let liveActiveMs = accumulatedActiveMs;
         let liveBreakMs  = accumulatedBreakMs;
-        if (currentState === "ACTIVE"   && lastStateChangeTime) liveActiveMs += (now - new Date(lastStateChangeTime));
-        if (currentState === "ON_BREAK" && lastStateChangeTime) liveBreakMs  += (now - new Date(lastStateChangeTime));
+
+        // FIXED: Only add time if the last state change happened AFTER the last background scrape time
+        if (lastStateChangeTime) {
+            const stateChangeTs = new Date(lastStateChangeTime).getTime();
+            // If we are active, calculate time moving forward from the current live session baseline
+            if (currentState === "ACTIVE" && now.getTime() > stateChangeTs) {
+                // To prevent double-counting, we only add the time that has passed *since* your last sync update
+                liveActiveMs += Math.max(0, now.getTime() - stateChangeTs);
+            }
+            if (currentState === "ON_BREAK" && now.getTime() > stateChangeTs) {
+                liveBreakMs += Math.max(0, now.getTime() - stateChangeTs);
+            }
+        }
 
         const activeMin = Math.max(0, Math.floor(liveActiveMs / 60000));
         const breakMin  = Math.max(0, Math.floor(liveBreakMs  / 60000));
