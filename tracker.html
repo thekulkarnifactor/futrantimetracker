@@ -180,7 +180,7 @@
                 <div class="field-block">
                     <span class="field-label">Portal Domain</span>
                     <span class="field-hint">e.g. yourcompany.greythr.com</span>
-                    <input type="text" id="inputGreythrDomain" placeholder="yourcompany.greythr.com">
+                    <input type="text" id="inputGreythrDomain" placeholder="yourcompany.greythr.com" value="futrantechsolutions.greythr.com">
                 </div>
                 <div class="field-block">
                     <span class="field-label">Employee ID / Username</span>
@@ -412,7 +412,9 @@
     }
 
     async function saveGreythrCreds() {
-        const domain = document.getElementById('inputGreythrDomain').value.trim();
+        const domain = document.getElementById('inputGreythrDomain').value.trim()
+            .replace(/^https?:\/\//i, '')
+            .replace(/\/+$/, '');
         const username = document.getElementById('inputGreythrUser').value.trim();
         const password = document.getElementById('inputGreythrPass').value;
         if (!domain || !username || !password) { alert("Fill in domain, username and password."); return; }
