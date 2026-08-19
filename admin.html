@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin · Shift Tracker</title>
+    <style>
+        :root {
+            --bg-main: #0f172a; --card-bg: #1e293b; --primary: #3b82f6; --success: #22c55e;
+            --warning: #eab308; --danger: #ef4444; --text-main: #f8fafc; --text-sub: #94a3b8; --border: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: var(--bg-main); color: var(--text-main); padding: 16px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+        .dashboard { width: 100%; max-width: 760px; display: flex; flex-direction: column; gap: 16px; }
+        .card { background-color: var(--card-bg); border-radius: 16px; padding: 20px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        h2 { font-size: 16px; font-weight: 700; margin-bottom: 2px; }
+        .subtitle { font-size: 13px; color: var(--text-sub); margin-bottom: 16px; }
+
+        .topbar { display: flex; align-items: center; justify-content: space-between; }
+        .who-name { font-size: 15px; font-weight: 700; }
+        .who-role { font-size: 11px; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.5px; }
+        .topbar-actions { display: flex; gap: 8px; }
+        .pill-btn { padding: 8px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); background: var(--bg-main); color: var(--text-main); cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+        .pill-btn.primary { border-color: var(--primary); color: var(--primary); }
+        .pill-btn.logout { color: var(--danger); border-color: var(--danger); }
+
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; color: var(--text-sub); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.4px; padding: 8px 6px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td { padding: 9px 6px; border-bottom: 1px solid rgba(51,65,85,0.5); vertical-align: middle; }
+        .table-wrap { overflow-x: auto; }
+
+        .badge { padding: 5px 10px; border-radius: 99px; font-size: 11px; font-weight: 700; text-transform: uppercase; white-space: nowrap; }
+        .bg-not_started { background: #475569; color: #cbd5e1; }
+        .bg-active      { background: #16a34a; color: #dcfce7; }
+        .bg-on_break    { background: #ca8a04; color: #fef9c3; }
+        .bg-completed   { background: #1d4ed8; color: #dbeafe; }
+        .bg-inactive    { background: rgba(239,68,68,0.15); color: #fca5a5; }
+
+        .field-block { margin-bottom: 14px; }
+        .field-label { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; display: block; }
+        select, input[type="time"], input[type="number"], input[type="date"] { width: 100%; padding: 12px 13px; font-size: 14px; font-weight: 600; border: 1px solid var(--border); border-radius: 10px; background-color: var(--bg-main); color: var(--text-main); outline: none; font-family: inherit; }
+        input:focus, select:focus { border-color: var(--primary); }
+        .fields-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+        .fields-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+        button { padding: 13px 16px; font-size: 13px; font-weight: 700; color: #fff; border: none; border-radius: 10px; cursor: pointer; }
+        .btn-apply { width: 100%; padding: 15px; font-size: 15px; font-weight: 700; background-color: var(--primary); }
+        .btn-tiny { padding: 6px 10px; font-size: 11px; border-radius: 8px; }
+        .btn-secondary { background-color: #475569; }
+        .btn-danger { background-color: var(--danger); }
+        .btn-success { background-color: var(--success); }
+        .row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+        .empty-state { color: var(--text-sub); font-size: 13px; text-align: center; padding: 20px 0; }
+        #accessDenied { display: none; text-align: center; padding: 60px 20px; }
+    </style>
+</head>
+<body>
+
+<div id="accessDenied">
+    <h2>Admins only</h2>
+    <p class="subtitle">Redirecting you back to your tracker…</p>
+</div>
+
+<div class="dashboard" id="adminApp" style="display:none;">
+
+    <div class="card topbar">
+        <div>
+            <div class="who-name" id="lblAdminName">Loading…</div>
+            <div class="who-role">Administrator</div>
+        </div>
+        <div class="topbar-actions">
+            <a href="tracker.html" class="pill-btn primary">My Tracker</a>
+            <button class="pill-btn logout" onclick="handleLogout()">Log Out</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Live Team Status</h2>
+        <div class="subtitle">Refreshes every 15 seconds · Today</div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Status</th><th>First In</th><th>Last In</th><th>Last Out</th><th>Active</th><th>Break</th><th>Target</th></tr></thead>
+                <tbody id="teamBody"><tr><td colspan="8" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Correct a User's Log</h2>
+        <div class="subtitle">Same math as the quick-correction on the tracker page, applied on their behalf</div>
+        <div class="field-block">
+            <span class="field-label">User</span>
+            <select id="correctUserSelect"></select>
+        </div>
+        <div class="fields-row-3">
+            <div>
+                <span class="field-label">Date</span>
+                <input type="date" id="correctDate">
+            </div>
+            <div>
+                <span class="field-label">First In</span>
+                <input type="time" id="correctFirstIn" step="60">
+            </div>
+            <div>
+                <span class="field-label">Last In</span>
+                <input type="time" id="correctLastIn" step="60">
+            </div>
+        </div>
+        <div class="field-block">
+            <span class="field-label">Active Hours (decimal)</span>
+            <input type="number" id="correctActiveHrs" step="0.001" min="0" max="24" placeholder="e.g. 7.25">
+        </div>
+        <button class="btn-apply" onclick="applyAdminCorrection()">Apply Correction</button>
+    </div>
+
+    <div class="card">
+        <h2>User Management</h2>
+        <div class="subtitle">Activate/deactivate accounts and grant admin access</div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Status</th><th>Actions</th></tr></thead>
+                <tbody id="usersBody"><tr><td colspan="5" class="empty-state">Loading…</td></tr></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Export Timesheet</h2>
+        <div class="subtitle">Downloads a CSV for all users in the selected range</div>
+        <div class="fields-row">
+            <div>
+                <span class="field-label">From</span>
+                <input type="date" id="exportFrom">
+            </div>
+            <div>
+                <span class="field-label">To</span>
+                <input type="date" id="exportTo">
+            </div>
+        </div>
+        <button class="btn-apply" onclick="exportCsv()">Export CSV</button>
+    </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+    const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cWVxZ21nd2NkZXNlenBpdGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDk5NjAsImV4cCI6MjA5NTk4NTk2MH0.x-GI2NFVVKuw3_BBjVvFTWdk7MhBce1okeWdxTflgV4";
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let currentUser = null;
+    let allProfiles = [];
+
+    function getLocalDateKey(d = new Date()) {
+        const yyyy = d.getFullYear(), mm = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
+        return `${yyyy}-${mm}-${dd}`;
+    }
+
+    async function init() {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) { window.location.href = "login.html"; return; }
+        currentUser = session.user;
+
+        const { data: profile } = await sb.from('profiles').select('*').eq('id', currentUser.id).single();
+        if (!profile || profile.role !== 'admin') {
+            document.getElementById('accessDenied').style.display = 'block';
+            setTimeout(() => window.location.href = "tracker.html", 1500);
+            return;
+        }
+
+        document.getElementById('lblAdminName').innerText = profile.full_name || profile.email;
+        document.getElementById('adminApp').style.display = 'flex';
+
+        const today = getLocalDateKey();
+        document.getElementById('correctDate').value = today;
+        document.getElementById('exportFrom').value = today;
+        document.getElementById('exportTo').value = today;
+
+        await loadUsers();
+        await loadTeamStatus();
+        setInterval(loadTeamStatus, 15000);
+    }
+
+    async function handleLogout() {
+        await sb.auth.signOut();
+        window.location.href = "login.html";
+    }
+
+    async function loadUsers() {
+        const { data, error } = await sb.from('profiles').select('*').order('full_name');
+        if (error) return;
+        allProfiles = data || [];
+
+        const select = document.getElementById('correctUserSelect');
+        select.innerHTML = allProfiles.map(p => `<option value="${p.id}">${escapeHtml(p.full_name || p.email)}</option>`).join('');
+
+        const body = document.getElementById('usersBody');
+        if (allProfiles.length === 0) { body.innerHTML = '<tr><td colspan="5" class="empty-state">No users yet.</td></tr>'; return; }
+        body.innerHTML = allProfiles.map(p => `
+            <tr>
+                <td>${escapeHtml(p.full_name || '—')}</td>
+                <td>${escapeHtml(p.email || '—')}</td>
+                <td><span class="badge ${p.role === 'admin' ? 'bg-active' : 'bg-not_started'}">${p.role}</span></td>
+                <td><span class="badge ${p.is_active ? 'bg-active' : 'bg-inactive'}">${p.is_active ? 'Active' : 'Deactivated'}</span></td>
+                <td class="row-actions">
+                    <button class="btn-tiny ${p.is_active ? 'btn-danger' : 'btn-success'}" onclick="toggleUserActive('${p.id}', ${!p.is_active})">${p.is_active ? 'Deactivate' : 'Activate'}</button>
+                    <button class="btn-tiny btn-secondary" onclick="toggleUserRole('${p.id}', '${p.role === 'admin' ? 'user' : 'admin'}')">${p.role === 'admin' ? 'Revoke Admin' : 'Make Admin'}</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function toggleUserActive(userId, newVal) {
+        if (userId === currentUser.id && !newVal) { alert("You can't deactivate your own account."); return; }
+        await sb.from('profiles').update({ is_active: newVal }).eq('id', userId);
+        loadUsers();
+    }
+
+    async function toggleUserRole(userId, newRole) {
+        if (userId === currentUser.id && newRole !== 'admin') { alert("You can't revoke your own admin access here — ask another admin."); return; }
+        await sb.from('profiles').update({ role: newRole }).eq('id', userId);
+        loadUsers();
+    }
+
+    async function loadTeamStatus() {
+        const todayKey = getLocalDateKey();
+        const { data: logs, error } = await sb.from('tracker_logs').select('*').eq('date_tracked', todayKey);
+        const body = document.getElementById('teamBody');
+        if (error) { body.innerHTML = '<tr><td colspan="8" class="empty-state">Could not load team status.</td></tr>'; return; }
+
+        const logsByUser = Object.fromEntries((logs || []).map(l => [l.user_id, l]));
+        const now = new Date();
+
+        body.innerHTML = allProfiles.map(p => {
+            const log = logsByUser[p.id];
+            if (!log) {
+                return `<tr><td>${escapeHtml(p.full_name || p.email)}</td><td><span class="badge bg-not_started">Not Started</span></td><td colspan="5" style="color:var(--text-sub);">—</td><td>${p.target_hours || 7}h</td></tr>`;
+            }
+
+            let liveActiveMs = parseFloat(log.accumulated_active_ms) || 0;
+            let liveBreakMs = parseFloat(log.accumulated_break_ms) || 0;
+            const anchor = log.is_manual_override ? log.last_state_change_time : log.last_scraped_at;
+            if (anchor) {
+                const anchorTs = new Date(anchor).getTime();
+                if (now.getTime() > anchorTs) {
+                    if (log.current_state === 'ACTIVE') liveActiveMs += (now.getTime() - anchorTs);
+                    else if (log.current_state === 'ON_BREAK') liveBreakMs += (now.getTime() - anchorTs);
+                }
+            }
+            const activeMin = Math.max(0, Math.floor(liveActiveMs / 60000));
+            const breakMin = Math.max(0, Math.floor(liveBreakMs / 60000));
+            const badgeClass = { NOT_STARTED: 'bg-not_started', ACTIVE: 'bg-active', ON_BREAK: 'bg-on_break', COMPLETED: 'bg-completed' }[log.current_state] || 'bg-not_started';
+            const firstIn = log.first_in_time ? new Date(log.first_in_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+
+            return `<tr>
+                <td>${escapeHtml(p.full_name || p.email)}</td>
+                <td><span class="badge ${badgeClass}">${log.current_state.replace('_',' ')}</span></td>
+                <td>${firstIn}</td>
+                <td>${log.last_in_str || '--:--'}</td>
+                <td>${log.last_out_str || '--:--'}</td>
+                <td>${Math.floor(activeMin/60)}h ${activeMin%60}m</td>
+                <td>${breakMin}m</td>
+                <td>${p.target_hours || 7}h</td>
+            </tr>`;
+        }).join('');
+    }
+
+    async function applyAdminCorrection() {
+        const userId = document.getElementById('correctUserSelect').value;
+        const date = document.getElementById('correctDate').value;
+        const rawFirstIn = document.getElementById('correctFirstIn').value;
+        const rawLastIn = document.getElementById('correctLastIn').value;
+        const rawActiveHrs = document.getElementById('correctActiveHrs').value;
+
+        if (!userId || !date || !rawFirstIn || !rawActiveHrs) { alert("User, date, first-in and active hours are required."); return; }
+
+        const datePrefix = date + " ";
+        const firstInTime = new Date(datePrefix + rawFirstIn);
+        const lastStateChangeTime = rawLastIn ? new Date(datePrefix + rawLastIn) : new Date();
+        const accumulatedActiveMs = parseFloat(rawActiveHrs) * 3600 * 1000;
+        const wallClockMs = lastStateChangeTime - firstInTime;
+        const accumulatedBreakMs = Math.max(0, wallClockMs - accumulatedActiveMs);
+
+        const payload = {
+            user_id: userId,
+            date_tracked: date,
+            current_state: 'ACTIVE',
+            first_in_time: firstInTime.toISOString(),
+            last_state_change_time: lastStateChangeTime.toISOString(),
+            accumulated_active_ms: accumulatedActiveMs,
+            accumulated_break_ms: accumulatedBreakMs,
+            is_manual_override: true,
+            last_scraped_at: new Date().toISOString()
+        };
+
+        const { error } = await sb.from('tracker_logs').upsert(payload, { onConflict: 'user_id,date_tracked' });
+        if (error) { alert("Could not apply correction: " + error.message); return; }
+        alert("Correction applied.");
+        loadTeamStatus();
+    }
+
+    async function exportCsv() {
+        const from = document.getElementById('exportFrom').value;
+        const to = document.getElementById('exportTo').value;
+        if (!from || !to) { alert("Pick a date range."); return; }
+
+        const { data: logs, error } = await sb.from('tracker_logs').select('*')
+            .gte('date_tracked', from).lte('date_tracked', to).order('date_tracked');
+        if (error) { alert("Export failed: " + error.message); return; }
+        if (!logs || logs.length === 0) { alert("No data in that range."); return; }
+
+        const nameByUser = Object.fromEntries(allProfiles.map(p => [p.id, p.full_name || p.email]));
+        const header = ['Date', 'Name', 'Status', 'First In', 'Last In', 'Last Out', 'Active (hrs)', 'Break (mins)'];
+        const rows = logs.map(l => [
+            l.date_tracked,
+            nameByUser[l.user_id] || l.user_id,
+            l.current_state,
+            l.first_in_time ? new Date(l.first_in_time).toLocaleTimeString() : '',
+            l.last_in_str || '',
+            l.last_out_str || '',
+            (parseFloat(l.accumulated_active_ms) / 3600000).toFixed(2),
+            Math.round(parseFloat(l.accumulated_break_ms) / 60000)
+        ]);
+
+        const csv = [header, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `timesheet_${from}_to_${to}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+    }
+
+    function csvEscape(val) {
+        const s = String(val ?? '');
+        return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    }
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    init();
+</script>
+</body>
+</html>

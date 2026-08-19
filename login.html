@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Sign In · Shift Tracker</title>
+<style>
+  :root {
+    --bg-main: #0f172a; --card-bg: #1e293b; --primary: #3b82f6; --success: #22c55e;
+    --warning: #eab308; --danger: #ef4444; --text-main: #f8fafc; --text-sub: #94a3b8; --border: #334155;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background-color: var(--bg-main); color: var(--text-main);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .card {
+    width: 100%; max-width: 380px; background-color: var(--card-bg); border-radius: 16px;
+    padding: 28px 24px; border: 1px solid var(--border); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+  }
+  .brand { text-align: center; margin-bottom: 24px; }
+  .brand-mark { font-size: 28px; margin-bottom: 6px; }
+  h1 { font-size: 19px; font-weight: 700; }
+  .sub { font-size: 13px; color: var(--text-sub); margin-top: 4px; }
+
+  .tabs { display: flex; background: var(--bg-main); border-radius: 10px; padding: 4px; margin-bottom: 20px; }
+  .tab { flex: 1; text-align: center; padding: 9px; font-size: 13px; font-weight: 700; border-radius: 8px; cursor: pointer; color: var(--text-sub); }
+  .tab.active { background: var(--primary); color: #fff; }
+
+  .field-block { margin-bottom: 14px; }
+  label { font-size: 11px; font-weight: 700; color: var(--text-sub); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; display: block; }
+  input[type="email"], input[type="password"], input[type="text"] {
+    width: 100%; padding: 13px 14px; font-size: 15px; font-weight: 500; border: 1px solid var(--border);
+    border-radius: 10px; background-color: var(--bg-main); color: var(--text-main); outline: none; font-family: inherit;
+  }
+  input:focus { border-color: var(--primary); }
+
+  button.primary {
+    width: 100%; padding: 15px; font-size: 15px; font-weight: 700; background-color: var(--primary);
+    color: #fff; border: none; border-radius: 12px; cursor: pointer; margin-top: 6px; transition: opacity 0.15s;
+  }
+  button.primary:active { opacity: 0.85; }
+  button.primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .forgot { text-align: center; margin-top: 14px; }
+  .forgot a { color: var(--text-sub); font-size: 12.5px; text-decoration: none; }
+  .forgot a:hover { color: var(--primary); }
+
+  #message { margin-top: 14px; font-size: 13px; text-align: center; min-height: 18px; }
+  .msg-error { color: var(--danger); }
+  .msg-ok { color: var(--success); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="brand">
+    <div class="brand-mark">🕐</div>
+    <h1>Shift Tracker</h1>
+    <div class="sub">Sign in to track your day</div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" id="tabLogin" onclick="switchTab('login')">Log In</div>
+    <div class="tab" id="tabSignup" onclick="switchTab('signup')">Sign Up</div>
+  </div>
+
+  <!-- LOG IN -->
+  <form id="formLogin" onsubmit="return handleLogin(event)">
+    <div class="field-block">
+      <label>Email</label>
+      <input type="email" id="loginEmail" required autocomplete="email">
+    </div>
+    <div class="field-block">
+      <label>Password</label>
+      <input type="password" id="loginPassword" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="primary" id="btnLogin">Log In</button>
+    <div class="forgot"><a href="#" onclick="handleForgotPassword(event)">Forgot password?</a></div>
+  </form>
+
+  <!-- SIGN UP -->
+  <form id="formSignup" class="hidden" onsubmit="return handleSignup(event)">
+    <div class="field-block">
+      <label>Full Name</label>
+      <input type="text" id="signupName" required autocomplete="name">
+    </div>
+    <div class="field-block">
+      <label>Email</label>
+      <input type="email" id="signupEmail" required autocomplete="email">
+    </div>
+    <div class="field-block">
+      <label>Password</label>
+      <input type="password" id="signupPassword" required minlength="6" autocomplete="new-password">
+    </div>
+    <button type="submit" class="primary" id="btnSignup">Create Account</button>
+  </form>
+
+  <div id="message"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+  const SUPABASE_URL = "https://ouqeqgmgwcdesezpitlo.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91cWVxZ21nd2NkZXNlenBpdGxvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDk5NjAsImV4cCI6MjA5NTk4NTk2MH0.x-GI2NFVVKuw3_BBjVvFTWdk7MhBce1okeWdxTflgV4";
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // If already logged in, skip straight to the dashboard.
+  (async () => {
+    const { data: { session } } = await sb.auth.getSession();
+    if (session) window.location.href = "tracker.html";
+  })();
+
+  function switchTab(which) {
+    document.getElementById('tabLogin').classList.toggle('active', which === 'login');
+    document.getElementById('tabSignup').classList.toggle('active', which === 'signup');
+    document.getElementById('formLogin').classList.toggle('hidden', which !== 'login');
+    document.getElementById('formSignup').classList.toggle('hidden', which !== 'signup');
+    setMessage('');
+  }
+
+  function setMessage(text, isError) {
+    const el = document.getElementById('message');
+    el.innerText = text;
+    el.className = text ? (isError ? 'msg-error' : 'msg-ok') : '';
+  }
+
+  async function handleLogin(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnLogin');
+    btn.disabled = true; setMessage('Signing in…');
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+
+    const { error } = await sb.auth.signInWithPassword({ email, password });
+    if (error) {
+      setMessage(error.message, true);
+      btn.disabled = false;
+      return false;
+    }
+    window.location.href = "tracker.html";
+    return false;
+  }
+
+  async function handleSignup(e) {
+    e.preventDefault();
+    const btn = document.getElementById('btnSignup');
+    btn.disabled = true; setMessage('Creating your account…');
+    const full_name = document.getElementById('signupName').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+
+    const { data, error } = await sb.auth.signUp({
+      email, password,
+      options: { data: { full_name } }
+    });
+
+    if (error) {
+      setMessage(error.message, true);
+      btn.disabled = false;
+      return false;
+    }
+
+    if (data.session) {
+      // Email confirmation is off — we're logged in immediately.
+      window.location.href = "tracker.html";
+    } else {
+      setMessage("Account created! Check your email to confirm, then log in.", false);
+      btn.disabled = false;
+      switchTab('login');
+    }
+    return false;
+  }
+
+  async function handleForgotPassword(e) {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value.trim();
+    if (!email) {
+      setMessage("Enter your email above first, then click 'Forgot password?'", true);
+      return;
+    }
+    setMessage('Sending reset link…');
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname.replace('login.html', 'reset-password.html')
+    });
+    setMessage(error ? error.message : "Reset link sent — check your email.", !!error);
+  }
+</script>
+</body>
+</html>
