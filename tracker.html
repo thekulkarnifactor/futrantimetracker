@@ -135,6 +135,7 @@
             </div>
             <div class="metric-row"><span>Break Gaps</span><strong id="lblBreakTime">0 mins</strong></div>
             <div class="metric-row"><span>Active Logged</span><strong id="lblActiveHrs">0h 0m</strong></div>
+            <div class="metric-row"><span>Standard Shift Ends</span><strong id="lblStandardDeparture">--:--</strong></div>
         </div>
         <div id="syncStatus" class="sync-indicator">Checking cloud connection...</div>
     </div>
@@ -166,11 +167,16 @@
         <summary>⚙️ Settings</summary>
         <div class="inner">
             <div class="field-block">
-                <span class="field-label">Daily Target Hours</span>
-                <span class="field-hint">Used to calculate your departure time</span>
+                <span class="field-label">Active Hours Target</span>
+                <span class="field-hint">Departure time stretches to cover breaks — you always hit this many ACTIVE hours</span>
                 <input type="number" id="inputTargetHours" step="0.25" min="1" max="16">
             </div>
-            <button class="btn-apply" onclick="saveTargetHours()">Save Target</button>
+            <div class="field-block">
+                <span class="field-label">Standard Shift Length</span>
+                <span class="field-hint">Simple wall-clock duration from arrival — ignores breaks entirely. e.g. arrive 1:00 + 8h = 9:00</span>
+                <input type="number" id="inputStandardShiftHours" step="0.25" min="1" max="16">
+            </div>
+            <button class="btn-apply" onclick="saveTargets()">Save Targets</button>
 
             <div style="height:20px;"></div>
             <div class="field-label" style="margin-bottom:10px;">greytHR Auto-Sync</div>
@@ -221,6 +227,7 @@
     let currentProfile = null;
 
     let targetActiveMinutes = 7 * 60;
+    let standardShiftHours  = 8;
     let currentState        = "NOT_STARTED";
     let firstInTime         = null;
     let accumulatedActiveMs = 0;
@@ -253,6 +260,9 @@
         targetActiveMinutes = (profile.target_hours || 7) * 60;
         document.getElementById('targetLabel').innerText = `${profile.target_hours || 7} Hours Target`;
         document.getElementById('inputTargetHours').value = profile.target_hours || 7;
+
+        standardShiftHours = profile.standard_shift_hours || 8;
+        document.getElementById('inputStandardShiftHours').value = standardShiftHours;
 
         if (!profile.is_active) {
             document.getElementById('blockedBanner').style.display = 'block';
@@ -382,16 +392,18 @@
         updateUI(); saveToCloud();
     }
 
-    async function saveTargetHours() {
-        const val = parseFloat(document.getElementById('inputTargetHours').value);
-        if (isNaN(val) || val <= 0) { alert("Enter a valid number of hours."); return; }
-        const { error } = await sb.from('profiles').update({ target_hours: val }).eq('id', currentUser.id);
+    async function saveTargets() {
+        const activeVal = parseFloat(document.getElementById('inputTargetHours').value);
+        const standardVal = parseFloat(document.getElementById('inputStandardShiftHours').value);
+        if (isNaN(activeVal) || activeVal <= 0 || isNaN(standardVal) || standardVal <= 0) { alert("Enter valid numbers for both fields."); return; }
+        const { error } = await sb.from('profiles').update({ target_hours: activeVal, standard_shift_hours: standardVal }).eq('id', currentUser.id);
         if (!error) {
-            targetActiveMinutes = val * 60;
-            document.getElementById('targetLabel').innerText = `${val} Hours Target`;
+            targetActiveMinutes = activeVal * 60;
+            standardShiftHours = standardVal;
+            document.getElementById('targetLabel').innerText = `${activeVal} Hours Target`;
             updateUI();
         } else {
-            alert("Could not save target hours.");
+            alert("Could not save targets.");
         }
     }
 
@@ -468,6 +480,7 @@
             badge.innerText = "Not Started"; badge.className = "badge bg-not_started";
             if (!accountBlocked) { btnIn.disabled = false; btnBreak.disabled = true; btnBack.disabled = true; btnLogoff.disabled = true; }
             document.getElementById('lblFirstIn').innerText = "--:--";
+            document.getElementById('lblStandardDeparture').innerText = "--:--";
             document.getElementById('lblBreakTime').innerText = "0 mins";
             document.getElementById('lblActiveHrs').innerText = "0h 0m";
             document.getElementById('timeBanner').innerText = "--:-- --";
@@ -483,7 +496,13 @@
             badge.innerText = currentState.replace('_',' '); badge.className = "badge bg-not_started";
         }
 
-        if (firstInTime) document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        if (firstInTime) {
+            document.getElementById('lblFirstIn').innerText = new Date(firstInTime).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+            const standardDeparture = new Date(new Date(firstInTime).getTime() + standardShiftHours * 3600 * 1000);
+            document.getElementById('lblStandardDeparture').innerText = standardDeparture.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        } else {
+            document.getElementById('lblStandardDeparture').innerText = '--:--';
+        }
 
         const now = new Date();
         let liveActiveMs = accumulatedActiveMs, liveBreakMs = accumulatedBreakMs;
