@@ -52,6 +52,14 @@
 
         .empty-state { color: var(--text-sub); font-size: 13px; text-align: center; padding: 20px 0; }
         #accessDenied { display: none; text-align: center; padding: 60px 20px; }
+
+        .status-line { font-size: 13px; color: var(--text-sub); padding: 10px 12px; background: rgba(15,23,42,0.4); border-radius: 10px; line-height: 1.5; }
+        .status-line.ok strong { color: var(--success); }
+        .status-line.warn strong { color: var(--warning); }
+        .status-line.danger strong { color: var(--danger); }
+        .fail-chip { display: inline-block; background: rgba(239,68,68,0.15); color: #fca5a5; border-radius: 8px; padding: 2px 8px; font-size: 11px; font-weight: 700; margin: 3px 4px 0 0; }
+        .sync-warn-flag { color: var(--danger); font-size: 11px; font-weight: 700; margin-left: 6px; }
+        .summary-note { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -72,6 +80,12 @@
             <a href="tracker.html" class="pill-btn primary">My Tracker</a>
             <button class="pill-btn logout" onclick="handleLogout()">Log Out</button>
         </div>
+    </div>
+
+    <div class="card" id="syncHealthCard">
+        <h2>Sync Agent Health</h2>
+        <div class="subtitle">Reports in every time the background agent completes a cycle</div>
+        <div id="syncHealthBody" class="status-line">Checking…</div>
     </div>
 
     <div class="card">
@@ -140,6 +154,36 @@
         <button class="btn-apply" onclick="exportCsv()">Export CSV</button>
     </div>
 
+    <div class="card">
+        <h2>Team Summary Report</h2>
+        <div class="subtitle">Totals per person for a date range — good for a week or a month, not just one day</div>
+        <div class="fields-row">
+            <div>
+                <span class="field-label">From</span>
+                <input type="date" id="summaryFrom">
+            </div>
+            <div>
+                <span class="field-label">To</span>
+                <input type="date" id="summaryTo">
+            </div>
+        </div>
+        <div class="btn-row" style="margin-bottom:14px;">
+            <button class="btn-secondary" onclick="setSummaryRange('week')">This Week</button>
+            <button class="btn-secondary" onclick="setSummaryRange('month')">This Month</button>
+        </div>
+        <div class="table-wrap">
+            <table>
+                <thead><tr><th>Name</th><th>Days Logged</th><th>Total Active</th><th>Total Break</th><th>Avg Active/Day</th><th>Vs Target</th></tr></thead>
+                <tbody id="summaryBody"><tr><td colspan="6" class="empty-state">Pick a range and generate.</td></tr></tbody>
+            </table>
+        </div>
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn-apply" style="flex:1;" onclick="generateSummary()">Generate</button>
+            <button class="btn-secondary" style="flex:1;" onclick="exportSummaryCsv()">Export Summary CSV</button>
+        </div>
+        <div class="summary-note">"Vs Target" compares total active hours logged to (target hours × days logged) — positive means over target, negative means under.</div>
+    </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -150,6 +194,8 @@
 
     let currentUser = null;
     let allProfiles = [];
+    let latestFailedUserIds = new Set();
+    let lastSummaryRows = [];
 
     function getLocalDateKey(d = new Date()) {
         const yyyy = d.getFullYear(), mm = String(d.getMonth()+1).padStart(2,'0'), dd = String(d.getDate()).padStart(2,'0');
@@ -177,8 +223,10 @@
         document.getElementById('exportTo').value = today;
 
         await loadUsers();
-        await loadTeamStatus();
+        await loadSyncHealth();
+        setSummaryRange('week');
         setInterval(loadTeamStatus, 15000);
+        setInterval(loadSyncHealth, 30000);
     }
 
     async function handleLogout() {
@@ -222,6 +270,40 @@
         loadUsers();
     }
 
+    async function loadSyncHealth() {
+        const card = document.getElementById('syncHealthBody');
+        const { data, error } = await sb.from('sync_status').select('*').eq('id', true).maybeSingle();
+
+        if (error || !data || !data.last_cycle_completed_at) {
+            latestFailedUserIds = new Set();
+            card.className = 'status-line warn';
+            card.innerHTML = "No sync data yet — the background agent hasn't reported in. Run the sync_status SQL migration and start greyt_sync.py if you haven't.";
+            return;
+        }
+
+        const lastCompleted = new Date(data.last_cycle_completed_at);
+        const ageMin = Math.max(0, Math.round((Date.now() - lastCompleted.getTime()) / 60000));
+        const failedUsers = data.failed_users || [];
+        latestFailedUserIds = new Set(failedUsers.map(f => f.user_id));
+
+        let statusClass = 'ok', freshness = `<strong>${ageMin} min ago</strong>`;
+        if (ageMin > 20) { statusClass = 'danger'; freshness = `<strong>${ageMin} min ago — looks stale, is the agent running?</strong>`; }
+        else if (ageMin > 5) { statusClass = 'warn'; freshness = `<strong>${ageMin} min ago</strong>`; }
+
+        const nameByUser = Object.fromEntries(allProfiles.map(p => [p.id, p.full_name || p.email]));
+        const failChips = failedUsers.length
+            ? failedUsers.map(f => `<span class="fail-chip">${escapeHtml(nameByUser[f.user_id] || f.username)}</span>`).join('')
+            : '';
+
+        card.className = `status-line ${statusClass}`;
+        card.innerHTML = `Last cycle completed ${freshness}<br>
+            Synced ${data.users_synced ?? 0} · Skipped ${data.users_skipped ?? 0} · Failed ${data.users_failed ?? 0} (of ${data.users_attempted ?? 0} attempted)
+            ${failChips ? `<br>Failing: ${failChips}` : ''}`;
+
+        // Re-render team status so the ⚠ flags reflect the freshly loaded failures.
+        if (allProfiles.length) loadTeamStatus();
+    }
+
     async function loadTeamStatus() {
         const todayKey = getLocalDateKey();
         const { data: logs, error } = await sb.from('tracker_logs').select('*').eq('date_tracked', todayKey);
@@ -233,8 +315,9 @@
 
         body.innerHTML = allProfiles.map(p => {
             const log = logsByUser[p.id];
+            const failFlag = latestFailedUserIds.has(p.id) ? `<span class="sync-warn-flag" title="Background sync failed for this user last cycle">⚠ sync failing</span>` : '';
             if (!log) {
-                return `<tr><td>${escapeHtml(p.full_name || p.email)}</td><td><span class="badge bg-not_started">Not Started</span></td><td colspan="5" style="color:var(--text-sub);">—</td><td>${p.target_hours || 7}h</td></tr>`;
+                return `<tr><td>${escapeHtml(p.full_name || p.email)}${failFlag}</td><td><span class="badge bg-not_started">Not Started</span></td><td colspan="5" style="color:var(--text-sub);">—</td><td>${p.target_hours || 7}h</td></tr>`;
             }
 
             let liveActiveMs = parseFloat(log.accumulated_active_ms) || 0;
@@ -253,7 +336,7 @@
             const firstIn = log.first_in_time ? new Date(log.first_in_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
 
             return `<tr>
-                <td>${escapeHtml(p.full_name || p.email)}</td>
+                <td>${escapeHtml(p.full_name || p.email)}${failFlag}</td>
                 <td><span class="badge ${badgeClass}">${log.current_state.replace('_',' ')}</span></td>
                 <td>${firstIn}</td>
                 <td>${log.last_in_str || '--:--'}</td>
@@ -337,6 +420,89 @@
     }
     function escapeHtml(s) {
         return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function setSummaryRange(kind) {
+        const today = new Date();
+        let from;
+        if (kind === 'week') {
+            const day = today.getDay(); // 0=Sun..6=Sat
+            const diffToMonday = day === 0 ? 6 : day - 1;
+            from = new Date(today); from.setDate(today.getDate() - diffToMonday);
+        } else {
+            from = new Date(today.getFullYear(), today.getMonth(), 1);
+        }
+        document.getElementById('summaryFrom').value = getLocalDateKey(from);
+        document.getElementById('summaryTo').value = getLocalDateKey(today);
+        generateSummary();
+    }
+
+    async function generateSummary() {
+        const from = document.getElementById('summaryFrom').value;
+        const to = document.getElementById('summaryTo').value;
+        const body = document.getElementById('summaryBody');
+        if (!from || !to) { body.innerHTML = '<tr><td colspan="6" class="empty-state">Pick a range and generate.</td></tr>'; return; }
+
+        body.innerHTML = '<tr><td colspan="6" class="empty-state">Loading…</td></tr>';
+        const { data: logs, error } = await sb.from('tracker_logs').select('*')
+            .gte('date_tracked', from).lte('date_tracked', to);
+
+        if (error) { body.innerHTML = '<tr><td colspan="6" class="empty-state">Could not load report.</td></tr>'; return; }
+        if (!logs || logs.length === 0) { body.innerHTML = '<tr><td colspan="6" class="empty-state">No data in that range.</td></tr>'; lastSummaryRows = []; return; }
+
+        const byUser = {};
+        logs.forEach(l => {
+            if (!byUser[l.user_id]) byUser[l.user_id] = { activeMs: 0, breakMs: 0, days: 0 };
+            byUser[l.user_id].activeMs += parseFloat(l.accumulated_active_ms) || 0;
+            byUser[l.user_id].breakMs += parseFloat(l.accumulated_break_ms) || 0;
+            byUser[l.user_id].days += 1;
+        });
+
+        const profileById = Object.fromEntries(allProfiles.map(p => [p.id, p]));
+        lastSummaryRows = Object.entries(byUser).map(([userId, agg]) => {
+            const profile = profileById[userId];
+            const targetHours = (profile && profile.target_hours) || 7;
+            const totalActiveHrs = agg.activeMs / 3600000;
+            const avgActiveHrs = totalActiveHrs / agg.days;
+            const vsTarget = totalActiveHrs - (targetHours * agg.days);
+            return {
+                name: (profile && (profile.full_name || profile.email)) || userId,
+                days: agg.days,
+                totalActiveHrs,
+                totalBreakMin: Math.round(agg.breakMs / 60000),
+                avgActiveHrs,
+                targetHours,
+                vsTarget
+            };
+        }).sort((a, b) => a.name.localeCompare(b.name));
+
+        body.innerHTML = lastSummaryRows.map(r => `
+            <tr>
+                <td>${escapeHtml(r.name)}</td>
+                <td>${r.days}</td>
+                <td>${r.totalActiveHrs.toFixed(1)}h</td>
+                <td>${r.totalBreakMin}m</td>
+                <td>${r.avgActiveHrs.toFixed(1)}h</td>
+                <td style="color:${r.vsTarget >= 0 ? 'var(--success)' : 'var(--danger)'}">${r.vsTarget >= 0 ? '+' : ''}${r.vsTarget.toFixed(1)}h</td>
+            </tr>
+        `).join('');
+    }
+
+    function exportSummaryCsv() {
+        if (!lastSummaryRows.length) { alert("Generate a report first."); return; }
+        const from = document.getElementById('summaryFrom').value;
+        const to = document.getElementById('summaryTo').value;
+        const header = ['Name', 'Days Logged', 'Total Active (h)', 'Total Break (mins)', 'Avg Active/Day (h)', 'Target (h/day)', 'Vs Target (h)'];
+        const rows = lastSummaryRows.map(r => [
+            r.name, r.days, r.totalActiveHrs.toFixed(2), r.totalBreakMin, r.avgActiveHrs.toFixed(2), r.targetHours, r.vsTarget.toFixed(2)
+        ]);
+        const csv = [header, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `team_summary_${from}_to_${to}.csv`;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
     }
 
     init();
