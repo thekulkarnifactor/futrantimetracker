@@ -291,8 +291,15 @@
         else if (ageMin > 5) { statusClass = 'warn'; freshness = `<strong>${ageMin} min ago</strong>`; }
 
         const nameByUser = Object.fromEntries(allProfiles.map(p => [p.id, p.full_name || p.email]));
+        const reasonLabel = {
+            bad_credentials: 'wrong password', account_locked: 'account locked', sso: 'SSO login',
+            login_stuck: 'login stuck', no_swipes: 'no swipes found', db_error: 'database error', error: 'error'
+        };
         const failChips = failedUsers.length
-            ? failedUsers.map(f => `<span class="fail-chip">${escapeHtml(nameByUser[f.user_id] || f.username)}</span>`).join('')
+            ? failedUsers.map(f => {
+                const why = f.reason && reasonLabel[f.reason] ? ` · ${reasonLabel[f.reason]}` : '';
+                return `<span class="fail-chip">${escapeHtml(nameByUser[f.user_id] || f.username)}${why}</span>`;
+            }).join('')
             : '';
 
         card.className = `status-line ${statusClass}`;
