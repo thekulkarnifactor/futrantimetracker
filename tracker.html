@@ -140,6 +140,16 @@
         <div id="syncStatus" class="sync-indicator">Checking cloud connection...</div>
     </div>
 
+    <div class="card" id="weekSummaryCard">
+        <h2 style="font-size:16px;margin-bottom:2px;">This Week</h2>
+        <div class="subtitle" id="weekSummarySubtitle">Loading…</div>
+        <div class="metrics-list">
+            <div class="metric-row"><span>Days Logged</span><strong id="lblWeekDays">0</strong></div>
+            <div class="metric-row"><span>Total Active</span><strong id="lblWeekActive">0h 0m</strong></div>
+            <div class="metric-row"><span>Vs Target</span><strong id="lblWeekVsTarget">--</strong></div>
+        </div>
+    </div>
+
     <div class="card">
         <h2 style="font-size:16px;margin-bottom:2px;">Quick Correction</h2>
         <div class="subtitle">3 values from the portal — that's all you need</div>
@@ -177,6 +187,14 @@
                 <input type="number" id="inputStandardShiftHours" step="0.25" min="1" max="16">
             </div>
             <button class="btn-apply" onclick="saveTargets()">Save Targets</button>
+
+            <div style="height:20px;"></div>
+            <div class="field-label" style="margin-bottom:10px;">Leave-Time Alerts</div>
+            <div class="status-line" id="notifyStatus">Checking…</div>
+            <div class="btn-row">
+                <button class="btn-secondary" id="btnEnableNotify" onclick="enableNotifications()">Enable Alerts</button>
+                <button class="btn-danger-outline" id="btnDisableNotify" onclick="disableNotifications()">Disable</button>
+            </div>
 
             <div style="height:20px;"></div>
             <div class="field-label" style="margin-bottom:10px;">greytHR Auto-Sync</div>
@@ -237,6 +255,10 @@
     let currentSavedDate    = getLocalDateKey();
     let isManualOverride    = false;
 
+    let notifyEnabled          = localStorage.getItem('leaveNotify') === 'true';
+    let notified15MinToday     = false;
+    let notifiedGoalReachedToday = false;
+
     function getLocalDateKey(d = new Date()) {
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, '0');
@@ -270,15 +292,96 @@
         }
 
         refreshGreythrStatus();
+        refreshNotifyStatus();
         loadFromCloud();
         loadHistory();
+        loadWeekSummary();
         setInterval(loadFromCloud, 10000);
         setInterval(updateUI, 1000);
+        setInterval(loadWeekSummary, 60000);
     }
 
     async function handleLogout() {
         await sb.auth.signOut();
         window.location.href = "login.html";
+    }
+
+    function refreshNotifyStatus() {
+        const el = document.getElementById('notifyStatus');
+        const enableBtn = document.getElementById('btnEnableNotify');
+        const disableBtn = document.getElementById('btnDisableNotify');
+
+        if (typeof Notification === 'undefined') {
+            el.innerText = "This browser doesn't support notifications.";
+            enableBtn.disabled = true; disableBtn.disabled = true;
+            return;
+        }
+
+        if (notifyEnabled && Notification.permission === 'granted') {
+            el.innerHTML = "<strong>Enabled</strong> — you'll get an alert 15 min before, and when you hit your target.";
+            enableBtn.style.display = 'none'; disableBtn.style.display = 'block';
+        } else if (Notification.permission === 'denied') {
+            el.innerText = "Blocked at the browser level — re-enable notifications for this site in your browser settings.";
+            enableBtn.style.display = 'none'; disableBtn.style.display = 'none';
+        } else {
+            el.innerText = "Off. Turn on to get alerted when it's time to leave — works while this tab is open.";
+            enableBtn.style.display = 'block'; disableBtn.style.display = 'none';
+        }
+    }
+
+    async function enableNotifications() {
+        if (typeof Notification === 'undefined') return;
+        const perm = await Notification.requestPermission();
+        if (perm === 'granted') {
+            notifyEnabled = true;
+            localStorage.setItem('leaveNotify', 'true');
+            new Notification("Leave-time alerts on", { body: "You'll be notified 15 min before your target and when you hit it." });
+        }
+        refreshNotifyStatus();
+    }
+
+    function disableNotifications() {
+        notifyEnabled = false;
+        localStorage.setItem('leaveNotify', 'false');
+        refreshNotifyStatus();
+    }
+
+    function maybeNotify(title, body) {
+        if (!notifyEnabled || typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+        try { new Notification(title, { body }); } catch { /* some browsers restrict this off-focus; fail silently */ }
+    }
+
+    function getMondayOfWeek(d = new Date()) {
+        const day = d.getDay(); // 0=Sun..6=Sat
+        const diff = day === 0 ? 6 : day - 1;
+        const monday = new Date(d);
+        monday.setDate(d.getDate() - diff);
+        return monday;
+    }
+
+    async function loadWeekSummary() {
+        if (!currentUser) return;
+        const from = getLocalDateKey(getMondayOfWeek());
+        const to = currentSavedDate;
+        const { data, error } = await sb.from('tracker_logs')
+            .select('accumulated_active_ms')
+            .eq('user_id', currentUser.id).gte('date_tracked', from).lte('date_tracked', to);
+
+        const sub = document.getElementById('weekSummarySubtitle');
+        if (error) { sub.innerText = "Could not load this week's totals."; return; }
+
+        const days = (data || []).length;
+        const totalActiveHrs = (data || []).reduce((sum, r) => sum + (parseFloat(r.accumulated_active_ms) || 0), 0) / 3600000;
+        const targetHrs = targetActiveMinutes / 60;
+        const vsTarget = totalActiveHrs - (targetHrs * days);
+
+        sub.innerText = `${from} → ${to}`;
+        document.getElementById('lblWeekDays').innerText = days;
+        const activeMin = Math.round(totalActiveHrs * 60);
+        document.getElementById('lblWeekActive').innerText = `${Math.floor(activeMin/60)}h ${activeMin%60}m`;
+        const vsEl = document.getElementById('lblWeekVsTarget');
+        vsEl.innerText = `${vsTarget >= 0 ? '+' : ''}${vsTarget.toFixed(1)}h`;
+        vsEl.style.color = vsTarget >= 0 ? 'var(--success)' : 'var(--danger)';
     }
 
     async function saveToCloud() {
@@ -296,6 +399,7 @@
         };
         const { error } = await sb.from('tracker_logs').upsert(payload, { onConflict: 'user_id,date_tracked' });
         document.getElementById('syncStatus').innerText = error ? "❌ Sync Error" : "✅ Synchronized with Cloud";
+        if (!error) loadWeekSummary();
     }
 
     async function loadFromCloud() {
@@ -535,10 +639,18 @@
                 if (remMs <= 0) {
                     document.getElementById('countdownText').innerText = "🎉 Goal reached! Safe to leave.";
                     document.getElementById('countdownText').style.color = "var(--success)";
+                    if (!notifiedGoalReachedToday) {
+                        notifiedGoalReachedToday = true;
+                        maybeNotify("🎉 Target reached", "You've hit your active-hours target — safe to leave.");
+                    }
                 } else {
                     const s = Math.floor(remMs / 1000);
                     document.getElementById('countdownText').innerText = `⏱️ ${Math.floor(s/3600)}h ${Math.floor((s%3600)/60)}m remaining`;
                     document.getElementById('countdownText').style.color = "var(--text-sub)";
+                    if (remMs <= 15 * 60 * 1000 && !notified15MinToday) {
+                        notified15MinToday = true;
+                        maybeNotify("⏱️ 15 minutes left", "You're 15 minutes from your active-hours target.");
+                    }
                 }
             }
         }
@@ -551,7 +663,10 @@
             accumulatedActiveMs = 0; accumulatedBreakMs = 0; lastStateChangeTime = null;
             lastScrapedAt = null; isManualOverride = false;
             currentSavedDate = today;
+            notified15MinToday = false;
+            notifiedGoalReachedToday = false;
             loadHistory();
+            loadWeekSummary();
         }
     }
 
