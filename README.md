@@ -1,5 +1,41 @@
 # Shift Tracker — Multi-Tenant Setup
 
+## v2 upgrade (November 2026) — do these three things
+
+1. **Database** — run `supabase/migration_v2.sql` in Supabase → SQL Editor (safe to re-run).
+2. **Web** — push `tracker.html` and `admin.html` to GitHub Pages as usual.
+3. **Sync agent** — on the always-on laptop, replace the old `greyt_sync.py` / `run_sync.bat` with the `sync/` folder:
+   - copy `sync/.env.example` to `sync/.env` and paste the **service_role** key
+   - double-click `sync/run_sync.bat` (first run creates `.venv`, installs packages and Chromium)
+   - move any existing `sync_sessions/` folder into `sync/` to keep saved logins
+
+### What v2 fixes
+- **Last out showing `--:--`**: the agent now reads swipes from the JSON the greytHR attendance page downloads, not from the page's visible text, so OUT swipes are seen even when the portal draws them as icons or keeps them in a collapsed list. Page text is still used as a fallback and merged in.
+- **Active time growing while you're out**: the agent always marked the day `ACTIVE`, so the dashboard kept adding active minutes after an OUT swipe. The state now follows your last swipe (`ON_BREAK` after an OUT).
+- **Missing OUT swipes are visible**: the dashboard shows every swipe as a timeline and warns when two INs follow each other.
+- **Quick Correction** now understands `01:47`, `1h 47m`, `107m` and `1.78` (it used to read `01:47` as 1 hour).
+- **Stale data warning** on the dashboard when greytHR hasn't updated for 5+ minutes.
+
+### Production behaviour of the agent
+- India time (`Asia/Kolkata`) everywhere, independent of the laptop's clock setting.
+- Retries Supabase calls with back-off; one bad user never stops the cycle.
+- After 3 failed logins in a row a user is paused for 30 min so greytHR doesn't lock the account.
+- Concurrency capped at 4 browsers by default; only scrapes inside `SYNC_WINDOW`; close-out of earlier days still runs every cycle.
+- Rotating log file in `sync/logs/sync.log`; failure screenshots auto-deleted after 3 days.
+- Heartbeat now includes the host name, agent version and the reason each failing user failed (shown on the admin page).
+- Clean shutdown on Ctrl+C; `run_sync.bat` restarts it on crash with a growing delay.
+
+### Diagnosing one person
+```
+cd sync
+.venv\Scripts\python greyt_sync.py --probe FTRN-PUN-XXXX
+```
+Prints the swipes it found and where they came from, and saves the raw greytHR responses to `sync/sync_debug/probe_*`. Nothing is written to the database. `--once` runs a single normal cycle.
+
+---
+
+## Original setup (v1)
+
 ## What changed
 
 - **Auth**: Supabase Auth (email + password). `login.html` handles sign up, log in, and "forgot password"; `reset-password.html` is where the reset email link lands.
@@ -35,7 +71,7 @@ Each person who wants automated greytHR syncing pastes their portal domain/usern
 On the one machine that will run the background agent:
 1. Get your **service role key** from Supabase Dashboard → Settings → API (different from the anon key — keep this one secret, never put it in a web page).
 2. Set it as an environment variable: `setx SUPABASE_SERVICE_KEY "your-service-role-key-here"`, then open a new terminal.
-3. Run `run_sync.bat` (Windows) — it loops every 15 minutes, pulling the list of opted-in users and syncing each of them.
+3. Run `sync/run_sync.bat` (Windows) — see the v2 section above.
 
 ## Notes / things worth knowing
 - "Deactivate" in the admin panel stops someone from punching in/out or having auto-sync run for them, but doesn't block them from logging in — Supabase Auth doesn't allow a full account ban from client-side code without extra server infrastructure (an Edge Function with the service key). Happy to add that if you want a harder lock later.

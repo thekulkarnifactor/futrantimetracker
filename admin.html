@@ -271,6 +271,8 @@
         loadUsers();
     }
 
+    const FAIL_REASON = { sso: 'SSO login, use manual times', login_failed: 'login failed', no_swipes: 'no swipes found' };
+
     async function loadSyncHealth() {
         const card = document.getElementById('syncHealthBody');
         const { data, error } = await sb.from('sync_status').select('*').eq('id', true).maybeSingle();
@@ -293,11 +295,12 @@
 
         const nameByUser = Object.fromEntries(allProfiles.map(p => [p.id, p.full_name || p.email]));
         const failChips = failedUsers.length
-            ? failedUsers.map(f => `<span class="fail-chip">${escapeHtml(nameByUser[f.user_id] || f.username)}</span>`).join('')
+            ? failedUsers.map(f => `<span class="fail-chip" title="${escapeHtml(FAIL_REASON[f.reason] || f.reason || '')}">${escapeHtml(nameByUser[f.user_id] || f.username)}${f.reason ? ` · ${escapeHtml(FAIL_REASON[f.reason] || f.reason)}` : ''}</span>`).join('')
             : '';
 
         card.className = `status-line ${statusClass}`;
-        card.innerHTML = `Last cycle completed ${freshness}<br>
+        const agent = data.agent_host ? ` on ${escapeHtml(data.agent_host)}${data.agent_version ? ' (v' + escapeHtml(data.agent_version) + ')' : ''}` : '';
+        card.innerHTML = `Last cycle completed ${freshness}${agent}<br>
             Synced ${data.users_synced ?? 0} · Skipped ${data.users_skipped ?? 0} · Failed ${data.users_failed ?? 0} (of ${data.users_attempted ?? 0} attempted)
             ${failChips ? `<br>Failing: ${failChips}` : ''}`;
 

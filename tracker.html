@@ -170,6 +170,20 @@
         .sync[data-state="ok"]::before { background: var(--green); }
         .sync[data-state="busy"]::before { background: var(--amber-btn); }
         .sync[data-state="bad"]::before { background: var(--red); }
+        .sync[data-state="warn"]::before { background: var(--amber-btn); }
+        .swipes { margin-top: 12px; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; }
+        .swipes .lbl { color: var(--ink-2); margin-right: 2px; }
+        .sw-pill { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; font-variant-numeric: tabular-nums; font-weight: 500; }
+        .sw-pill.in  { background: var(--t-green); color: var(--green); }
+        .sw-pill.out { background: var(--t-amber); color: var(--amber); }
+        .sw-pill.miss { background: var(--t-red); color: var(--red); border: 1px dashed currentColor; }
+        :root[data-theme="dark"] .sw-pill.in  { background: color-mix(in srgb, var(--green) 18%, transparent); }
+        :root[data-theme="dark"] .sw-pill.out { background: color-mix(in srgb, var(--amber) 18%, transparent); }
+        :root[data-theme="dark"] .sw-pill.miss { background: color-mix(in srgb, var(--red) 14%, transparent); }
+        .swipe-note { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+        .swipe-note strong { color: var(--red); font-weight: 600; }
+        .field-preview { font-size: 12.5px; min-height: 18px; margin-top: 4px; color: var(--ink-2); }
+        .field-preview.ok { color: var(--green); } .field-preview.bad { color: var(--red); }
 
         .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
         .stats.three, .stats.four { grid-template-columns: repeat(2, 1fr); }
@@ -543,6 +557,8 @@
                     <div class="stat"><dt>Last out</dt><dd id="lblLastOut">--:--</dd></div>
                     <div class="stat"><dt>Standard shift ends</dt><dd id="lblStandardDeparture">--:--</dd></div>
                 </dl>
+                <div class="swipes" id="swipeTrail" aria-live="polite" hidden></div>
+                <p class="swipe-note" id="swipeNote" hidden></p>
             </section>
 
             <section class="card" aria-labelledby="hPlan">
@@ -617,8 +633,9 @@
             </div>
             <label class="field">
                 <span class="field-label">Active hours from the portal</span>
-                <span class="field-hint">Use decimal hours. 01:47 becomes 1.783</span>
-                <input type="number" id="inputActiveHrs" step="0.001" min="0" max="24" placeholder="1.783">
+                <span class="field-hint">Type it as the portal shows it: 01:47, 1h 47m, 107m or 1.78</span>
+                <input type="text" id="inputActiveHrs" inputmode="text" autocomplete="off" placeholder="01:47">
+                <span class="field-preview" id="activePreview"></span>
             </label>
             <button class="btn full" onclick="applyCorrection()">Save times</button>
             <h3 style="margin-top:22px;">Back to auto-sync</h3>
@@ -952,6 +969,7 @@
     // ------------------------------------------------------------------
     async function init() {
         initUi();
+        wireActivePreview();
         initMotion();
         setToday();
         renderDial(0, 0, targetActiveMinutes * 60000);
@@ -1157,6 +1175,58 @@
         else { setSync("Saved to the cloud", 'ok'); toast("Saved"); loadWeekSummary(); loadHistory(); }
     }
 
+    // ------------------------------------------------------------------
+    // Swipes: last in / last out / timeline
+    // ------------------------------------------------------------------
+    const STALE_AFTER_MIN = 5;
+
+    // "13:23:11" / "01:23:11 PM" on today's date → Date (local)
+    function clockToDate(str, dateKey = currentSavedDate) {
+        const m = String(str || '').match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(am|pm)?/i);
+        if (!m) return null;
+        let h = +m[1]; const mi = +m[2], se = +(m[3] || 0), ap = (m[4] || '').toLowerCase();
+        if (ap === 'pm' && h < 12) h += 12;
+        if (ap === 'am' && h === 12) h = 0;
+        const [y, mo, d] = dateKey.split('-').map(Number);
+        return new Date(y, mo - 1, d, h, mi, se);
+    }
+
+    function renderSwipes(log) {
+        const trail = $('swipeTrail'), note = $('swipeNote');
+        const lastIn  = log && log.last_in_str  && log.last_in_str  !== '--:--' ? clockToDate(log.last_in_str)  : null;
+        const lastOut = log && log.last_out_str && log.last_out_str !== '--:--' ? clockToDate(log.last_out_str) : null;
+        swapText($('lblLastIn'), lastIn ? fmtTime(lastIn) : '--:--');
+
+        let swipes = (log && Array.isArray(log.swipes)) ? log.swipes : [];
+        let outText = '--:--';
+        if (lastOut) outText = fmtTime(lastOut);
+        else if (log && !log.is_manual_override && (swipes.length || lastIn)) outText = 'No OUT yet';
+        swapText($('lblLastOut'), outText);
+
+        if (!swipes.length || (log && log.is_manual_override)) {
+            trail.hidden = true; note.hidden = true; trail.innerHTML = ''; return;
+        }
+
+        let prev = null, html = '<span class="lbl">Swipes</span>';
+        for (const s of swipes) {
+            if (prev === 'IN' && s.type === 'IN') html += '<span class="sw-pill miss" title="An OUT swipe is missing here">OUT ?</span>';
+            const d = clockToDate(s.time);
+            const cls = s.type === 'IN' ? 'in' : 'out';
+            html += `<span class="sw-pill ${cls}">${s.type === 'IN' ? 'IN' : 'OUT'} ${escapeHtml(d ? fmtTime(d) : s.time)}</span>`;
+            prev = s.type;
+        }
+        trail.innerHTML = html;
+        trail.hidden = false;
+
+        const missed = log.missed_out_count || 0;
+        if (missed > 0) {
+            note.innerHTML = `<strong>${missed === 1 ? 'One OUT swipe is' : missed + ' OUT swipes are'} missing.</strong> The gap between back-to-back INs counts as a break, the way greytHR counts it. If you never stepped out, use Settings → Fix today's times.`;
+            note.hidden = false;
+        } else {
+            note.hidden = true;
+        }
+    }
+
     async function loadFromCloud() {
         if (!currentUser) return;
         try {
@@ -1173,15 +1243,22 @@
                 lastStateChangeTime = log.last_state_change_time ? new Date(log.last_state_change_time) : null;
                 lastScrapedAt       = log.last_scraped_at        ? new Date(log.last_scraped_at)        : null;
 
-                swapText($('lblLastIn'), log.last_in_str  || "--:--");
-                swapText($('lblLastOut'), log.last_out_str || "--:--");
+                renderSwipes(log);
 
-                setSync(isManualOverride
-                    ? "Manual times. Auto-sync paused for today."
-                    : "Updating automatically from greytHR", 'ok');
+                if (isManualOverride) {
+                    setSync("Manual times. Auto-sync paused for today.", 'ok');
+                } else {
+                    const ageMin = lastScrapedAt ? Math.round((Date.now() - lastScrapedAt.getTime()) / 60000) : null;
+                    if (ageMin !== null && ageMin >= STALE_AFTER_MIN && currentState !== 'COMPLETED') {
+                        setSync(`Last update from greytHR ${ageMin} min ago`, 'warn');
+                    } else {
+                        setSync("Updating automatically from greytHR", 'ok');
+                    }
+                }
             } else {
                 currentState = "NOT_STARTED";
                 isManualOverride = false;
+                renderSwipes(null);
                 setSync("No punches yet today", 'busy');
             }
         } catch {
@@ -1242,13 +1319,19 @@
 
         if (!rawFirstIn || !rawActiveHrs) { toast("Enter your first in time and the active hours from the portal."); return; }
 
-        const todayPrefix = new Date().toDateString() + " ";
-        isManualOverride = true;
+        const activeHrs = parseHours(rawActiveHrs);
+        if (activeHrs === null || activeHrs > 24) { toast("Couldn't read the active hours. Try 01:47 or 1h 47m."); return; }
 
-        firstInTime = new Date(todayPrefix + rawFirstIn);
-        lastStateChangeTime = rawLastIn ? new Date(todayPrefix + rawLastIn) : new Date();
+        const fIn = clockToDate(rawFirstIn);
+        const lIn = rawLastIn ? clockToDate(rawLastIn) : new Date();
+        if (!fIn || fIn > new Date()) { toast("First in can't be in the future."); return; }
+        if (lIn < fIn) { toast("Last in can't be earlier than first in."); return; }
+
+        isManualOverride = true;
+        firstInTime = fIn;
+        lastStateChangeTime = lIn;
         lastScrapedAt = new Date();
-        accumulatedActiveMs = parseFloat(rawActiveHrs) * 3600 * 1000;
+        accumulatedActiveMs = Math.round(activeHrs * 3600 * 1000);
 
         const wallClockMs = lastStateChangeTime - firstInTime;
         accumulatedBreakMs = Math.max(0, wallClockMs - accumulatedActiveMs);
@@ -1256,6 +1339,37 @@
 
         updateUI(); saveToCloud();
         closeSettings();
+    }
+
+    // Accepts what people copy from the portal: 01:47 · 1:47:30 · 1h 47m · 107m · 1.78
+    function parseHours(raw) {
+        const s = String(raw ?? '').toLowerCase().replace(/,/g, '.').trim();
+        if (!s) return null;
+        let m;
+        if ((m = s.match(/(\d{1,2})\s*:\s*(\d{1,2})(?:\s*:\s*(\d{1,2}))?/))) {
+            const h = +m[1], mi = +m[2], se = +(m[3] || 0);
+            return (mi >= 60 || se >= 60) ? null : h + mi / 60 + se / 3600;
+        }
+        if ((m = s.match(/^(\d+)\s*m(?:in(?:ute)?s?)?$/))) return +m[1] / 60;
+        if ((m = s.match(/^(\d+(?:\.\d+)?)\s*h(?:rs?|ours?)?\s*(?:(\d+)\s*(?:m(?:in(?:ute)?s?)?)?)?$/))) {
+            const mi = +(m[2] || 0); return mi >= 60 ? null : +m[1] + mi / 60;
+        }
+        if ((m = s.match(/^(\d+(?:\.\d+)?)$/))) return +m[1];
+        return null;
+    }
+
+    function wireActivePreview() {
+        const input = $('inputActiveHrs'), prev = $('activePreview');
+        if (!input || !prev) return;
+        input.addEventListener('input', () => {
+            const raw = input.value.trim();
+            prev.className = 'field-preview';
+            if (!raw) { prev.innerText = ''; return; }
+            const v = parseHours(raw);
+            if (v === null || v > 24) { prev.classList.add('bad'); prev.innerText = "Couldn't read that. Try 01:47 or 1h 47m"; }
+            else { prev.classList.add('ok'); const t = Math.round(v * 60); prev.innerText = `= ${Math.floor(t/60)}h ${String(t%60).padStart(2,'0')}m`; }
+        });
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') applyCorrection(); });
     }
 
     async function saveTargets() {
@@ -1496,6 +1610,7 @@
             notifiedGoalReachedToday = false;
             wasReached = null;
             plannedBreakMin = 0; syncChips();
+            renderSwipes(null);
             setToday();
             loadHistory();
             loadWeekSummary();

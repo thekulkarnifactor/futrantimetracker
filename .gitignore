@@ -1,0 +1,15 @@
+# Secrets
+.env
+sync/.env
+
+# Live greytHR login cookies and failure screenshots (contain personal data)
+sync/sync_sessions/
+sync/sync_debug/
+sync_sessions/
+sync_debug/
+
+# Agent runtime
+sync/logs/
+sync/.venv/
+__pycache__/
+*.pyc
