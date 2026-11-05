@@ -177,6 +177,7 @@ class ScrapeResult:
     source: str = ""          # "network" | "page" | ""
     error: str | None = None  # short machine-readable reason
     login_failed: bool = False
+    portal_total_min: int | None = None  # greytHR's own "Swipes (Total: hh:mm)"
 
 
 # --------------------------------------------------------------------------
@@ -210,19 +211,28 @@ def _norm_dir(v):
     return None
 
 
-def _parse_when(v, day: dt.date) -> dt.datetime | None:
+def _parse_when(v, day: dt.date, naive_dates_are_utc: bool = False) -> dt.datetime | None:
+    """
+    naive_dates_are_utc: greytHR's API sends swipe timestamps like
+    "2026-11-05T07:34:01" that are UTC with no zone marker (the portal shows
+    13:04:01 IST for that swipe). Set for API values; page text is always local.
+    """
     if isinstance(v, (int, float)) and v > 10**9:  # epoch seconds or ms
         ts = v / 1000 if v > 10**12 else v
         return dt.datetime.fromtimestamp(ts, TZ)
     if not isinstance(v, str):
         return None
     s = v.strip()
-    # Full ISO with offset / Z
-    if re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}", s) and (s.endswith("Z") or re.search(r"[+-]\d{2}:?\d{2}$", s)):
-        try:
-            return dt.datetime.fromisoformat(s.replace("Z", "+00:00")).astimezone(TZ)
-        except ValueError:
-            pass
+    if re.match(r"^\d{4}-\d{2}-\d{2}[T ]\d{1,2}:\d{2}", s):
+        has_zone = s.endswith("Z") or re.search(r"[+-]\d{2}:?\d{2}$", s)
+        if has_zone or naive_dates_are_utc:
+            try:
+                parsed = dt.datetime.fromisoformat(s.replace("Z", "+00:00").replace(" ", "T", 1))
+                if parsed.tzinfo is None:
+                    parsed = parsed.replace(tzinfo=dt.timezone.utc)
+                return parsed.astimezone(TZ)
+            except ValueError:
+                pass
     m = _TIME_RE.search(s)
     if not m:
         return None
@@ -256,8 +266,9 @@ def swipes_from_json(payloads: list, day: dt.date) -> list[Swipe]:
         for node in _walk(payload):
             low = {k.lower(): v for k, v in node.items() if isinstance(k, str)}
             direction = next((_norm_dir(low[k]) for k in _DIR_KEYS if k in low and _norm_dir(low[k])), None)
-            when = next((_parse_when(low[k], day) for k in _TIME_KEYS if k in low and _parse_when(low[k], day)), None)
-            if direction and when and when.date() == day:
+            when = next((w for k in _TIME_KEYS if k in low
+                         for w in [_parse_when(low[k], day, naive_dates_are_utc=True)] if w), None)
+            if direction and when and abs((when.date() - day).days) <= 1:
                 raw.append((when, direction))
     if not raw:
         return []
@@ -275,6 +286,40 @@ def swipes_from_json(payloads: list, day: dt.date) -> list[Swipe]:
         if kind in ("IN", "OUT"):
             out.append(Swipe(when, kind))
     return sorted(set(out))
+
+
+_learned_offset = dt.timedelta(0)
+_offset_lock = threading.Lock()
+
+
+def calibrate(net: list[Swipe], page: list[Swipe], day: dt.date, username: str) -> list[Swipe]:
+    """
+    The portal page shows local times, so when we can read it, it is the ground
+    truth for the API's clock. Find the shift that lines the API swipes up with
+    the page swipes, apply it, and remember it for cycles where the page can't
+    be read. Returns the API swipes for `day`, corrected.
+    """
+    global _learned_offset
+    offset = None
+    if net and page:
+        best, best_hits = None, 0
+        candidates = {round((p.at - n.at).total_seconds() / 60) for p in page for n in net if p.kind == n.kind}
+        for mins in candidates:
+            d = dt.timedelta(minutes=mins)
+            hits = sum(1 for n in net if any(p.kind == n.kind and abs((n.at + d - p.at).total_seconds()) <= 90 for p in page))
+            if hits > best_hits or (hits == best_hits and best is not None and abs(mins) < abs(best)):
+                best, best_hits = mins, hits
+        if best is not None and best_hits >= max(1, min(len(net), len(page)) // 2):
+            offset = dt.timedelta(minutes=best)
+            with _offset_lock:
+                if offset != _learned_offset:
+                    log.warning("[%s] API clock differs from the portal page by %+d min — correcting.", username, best)
+                    _learned_offset = offset
+    if offset is None:
+        with _offset_lock:
+            offset = _learned_offset
+    fixed = [Swipe(s.at + offset, s.kind) for s in net]
+    return sorted({s for s in fixed if s.at.date() == day})
 
 
 # --------------------------------------------------------------------------
@@ -306,10 +351,29 @@ def swipes_from_text(text: str, day: dt.date) -> list[Swipe]:
 # --------------------------------------------------------------------------
 # Browser scrape
 # --------------------------------------------------------------------------
-READY_JS = r"""() => {
-    const t = document.body ? document.body.innerText : '';
-    return /Swipes\s*\(Total:/i.test(t) || /\b(IN|OUT)\s+\d{1,2}:\d{2}:\d{2}/.test(t);
+# Text of the whole page, including inside web components' shadow roots
+# (document.body.innerText skips those, which is why page parsing found nothing).
+DEEP_TEXT_JS = r"""() => {
+    const out = [];
+    const walk = (n) => {
+        if (n.shadowRoot) walk(n.shadowRoot);
+        for (const c of n.childNodes) {
+            if (c.nodeType === 3) { const t = c.textContent.trim(); if (t) out.push(t); }
+            else if (c.nodeType === 1 && c.tagName !== 'SCRIPT' && c.tagName !== 'STYLE') walk(c);
+        }
+    };
+    if (document.body) walk(document.body);
+    return out.join('\n');
 }"""
+
+READY_JS = "() => { const t = (" + DEEP_TEXT_JS + ")(); " \
+    "return /Swipes\\s*\\(Total:/i.test(t) || /\\b(IN|OUT)\\s+\\d{1,2}:\\d{2}:\\d{2}/.test(t); }"
+
+_TOTAL_RE = re.compile(r"Swipes\s*\(\s*Total:\s*(\d{1,2}):(\d{2})", re.I)
+
+
+_dumped_no_swipes: set = set()
+_dump_lock = threading.Lock()
 
 
 def _safe(name: str) -> str:
@@ -459,25 +523,31 @@ def scrape_user(domain: str, username: str, password: str, day: dt.date, probe_d
             except Exception:
                 pass
 
-            text = page.evaluate("() => document.body ? document.body.innerText : ''")
+            text = page.evaluate(DEEP_TEXT_JS)
             with captured_lock:
                 payloads = list(captured)
-            net = swipes_from_json(payloads, day)
+            net_raw = swipes_from_json(payloads, day)
             dom = swipes_from_text(text, day)
+            net = calibrate(net_raw, dom, day, username)
 
-            # Prefer the network list; if the page shows swipes the JSON missed, merge them.
+            # API list is complete; add any page swipe it doesn't already have (±90 s).
             if net:
-                merged = sorted(set(net) | set(dom))
-                result.swipes, result.source = merged, "network"
+                extra = [p for p in dom if not any(p.kind == n.kind and abs((p.at - n.at).total_seconds()) <= 90 for n in net)]
+                result.swipes, result.source = sorted(set(net) | set(extra)), "api"
             else:
                 result.swipes, result.source = dom, "page"
+
+            m = _TOTAL_RE.search(text)
+            if m:
+                result.portal_total_min = int(m.group(1)) * 60 + int(m.group(2))
 
             if probe_dir:
                 probe_dir.mkdir(parents=True, exist_ok=True)
                 (probe_dir / "page_text.txt").write_text(text, encoding="utf-8")
                 (probe_dir / "parsed.json").write_text(
                     json.dumps(
-                        {"network": [s.to_json() for s in net],
+                        {"api_raw": [s.to_json() for s in net_raw],
+                         "api_corrected": [s.to_json() for s in net],
                          "page": [s.to_json() for s in dom],
                          "used": result.source},
                         indent=2,
@@ -487,8 +557,12 @@ def scrape_user(domain: str, username: str, password: str, day: dt.date, probe_d
 
             if not result.swipes:
                 result.error = "no_swipes"
-                if not re.search(r"Swipes\s*\(Total:\s*0", text):
-                    debug_dump(page, username, "no-swipes-found")
+                key = (username, day)
+                with _dump_lock:
+                    first_today = key not in _dumped_no_swipes
+                    _dumped_no_swipes.add(key)
+                if first_today and not re.search(r"Swipes\s*\(Total:\s*0", text):
+                    debug_dump(page, username, "no-swipes-found (saved once per day)")
         except Exception as e:
             result.error = f"navigation: {type(e).__name__}"
             log.error("[%s] portal error: %s", username, e)
@@ -618,7 +692,7 @@ def push_heartbeat(started: dt.datetime, attempted: int, synced: int, skipped: i
                 "users_failed": len(failed),
                 "failed_users": failed,
                 "agent_host": platform.node(),
-                "agent_version": "2.0",
+                "agent_version": "2.1",
             },
             prefer="resolution=merge-duplicates,return=minimal",
         )
@@ -703,6 +777,10 @@ def sync_one_user(u: dict, day: dt.date) -> tuple[str, str | None]:
 
     trail = " ".join(f"{x.kind}@{x.at:%H:%M}" for x in res.swipes)
     warn = f" | {s.missed_out} missing OUT" if s.missed_out else ""
+    if res.portal_total_min is not None and s.state == "ON_BREAK":
+        diff = abs(s.active_ms // 60000 - res.portal_total_min)
+        if diff > 2:
+            warn += f" | MISMATCH: greytHR total {res.portal_total_min // 60}h{res.portal_total_min % 60:02d}m"
     log.info("[%s] %s | active %.2fh break %dm | %s via %s (%.1fs)%s",
              username, s.state, s.active_ms / 3.6e6, s.break_ms // 60000, trail, res.source,
              time.monotonic() - t0, warn)
@@ -834,7 +912,7 @@ def main():
         signal.signal(signal.SIGTERM, _stop)
 
     cap = "no cap" if MAX_CONCURRENT_USERS <= 0 else f"max {MAX_CONCURRENT_USERS} at once"
-    log.info("greytHR sync agent v2 started (%s, every %ss, window %s, %s)", cap, SYNC_INTERVAL_SECONDS, SYNC_WINDOW, TZ)
+    log.info("greytHR sync agent v2.1 started (%s, every %ss, window %s, %s)", cap, SYNC_INTERVAL_SECONDS, SYNC_WINDOW, TZ)
     cycles = 0
     while not STOP.is_set():
         busy = run_cycle()
