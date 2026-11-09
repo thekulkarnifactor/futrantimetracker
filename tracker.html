@@ -1009,8 +1009,13 @@
         loadHistory();
         loadWeekSummary();
         setInterval(loadFromCloud, 10000);
-        setInterval(updateUI, 1000);
-        setInterval(loadWeekSummary, 60000);
+        setInterval(() => { updateUI(); paintTodayLive(); }, 1000);
+        setInterval(() => { loadWeekSummary(); loadHistory(); }, 60000);
+        // Browsers throttle timers in background tabs; catch up as soon as you look again.
+        const catchUp = () => { if (document.visibilityState === 'visible') { loadFromCloud(); loadWeekSummary(); loadHistory(); } };
+        document.addEventListener('visibilitychange', catchUp);
+        window.addEventListener('focus', catchUp);
+        window.addEventListener('online', catchUp);
     }
 
     async function handleLogout() {
@@ -1227,12 +1232,19 @@
         }
     }
 
+    let lastCloudSig = null;
+
     async function loadFromCloud() {
         if (!currentUser) return;
         try {
             const { data: log, error } = await sb.from('tracker_logs').select('*')
                 .eq('user_id', currentUser.id).eq('date_tracked', currentSavedDate).maybeSingle();
             if (error) throw error;
+
+            const sig = log ? [log.current_state, log.accumulated_active_ms, log.accumulated_break_ms, log.is_manual_override, log.first_in_time].join('|') : 'none';
+            const changed = lastCloudSig !== null && sig !== lastCloudSig;
+            lastCloudSig = sig;
+            if (changed) { loadHistory(); loadWeekSummary(); }
 
             if (log) {
                 isManualOverride    = log.is_manual_override || false;
@@ -1438,6 +1450,34 @@
     // ------------------------------------------------------------------
     // History
     // ------------------------------------------------------------------
+    const stateName = { NOT_STARTED: 'Not started', ACTIVE: 'Active', ON_BREAK: 'On break', COMPLETED: 'Ended' };
+
+    // Active/break for today including the time since the last sync, same maths as the dial.
+    function liveTotals(now = new Date()) {
+        let a = accumulatedActiveMs, b = accumulatedBreakMs;
+        const anchor = isManualOverride ? lastStateChangeTime : lastScrapedAt;
+        if (anchor) {
+            const dt = now.getTime() - new Date(anchor).getTime();
+            if (dt > 0) { if (currentState === 'ACTIVE') a += dt; else if (currentState === 'ON_BREAK') b += dt; }
+        }
+        return { a: Math.max(0, a), b: Math.max(0, b) };
+    }
+
+    // Keep today's row in "Last 7 days" ticking with the rest of the page.
+    function paintTodayLive() {
+        if (!currentSavedDate || currentState === 'NOT_STARTED') return;
+        const tr = document.querySelector(`#historyBody tr[data-key="${currentSavedDate}"]`);
+        if (!tr) return;
+        const { a, b } = liveTotals();
+        const am = Math.floor(a / 60000), bm = Math.floor(b / 60000);
+        const st = tr.querySelector('[data-cell="st"]'), ac = tr.querySelector('[data-cell="a"]'), bc = tr.querySelector('[data-cell="b"]');
+        const label = stateName[currentState] || currentState;
+        if (st && st.textContent !== label) { st.textContent = label; st.className = `st ${currentState}`; }
+        const aTxt = `${Math.floor(am/60)}h ${am%60}m`, bTxt = `${bm}m`;
+        if (ac && ac.textContent !== aTxt) ac.textContent = aTxt;
+        if (bc && bc.textContent !== bTxt) bc.textContent = bTxt;
+    }
+
     async function loadHistory() {
         const { data, error } = await sb.from('tracker_logs')
             .select('date_tracked, current_state, accumulated_active_ms, accumulated_break_ms')
@@ -1447,18 +1487,18 @@
             body.innerHTML = '<tr><td colspan="4" class="empty">No days logged yet.</td></tr>';
             return;
         }
-        const stateName = { NOT_STARTED: 'Not started', ACTIVE: 'Active', ON_BREAK: 'On break', COMPLETED: 'Ended' };
         body.innerHTML = data.map((row, i) => {
             const activeMin = Math.round((row.accumulated_active_ms || 0) / 60000);
             const breakMin  = Math.round((row.accumulated_break_ms  || 0) / 60000);
             const day = new Date(row.date_tracked + 'T00:00:00').toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' });
-            return `<tr style="--r:${i}">
+            return `<tr style="--r:${i}" data-key="${escapeHtml(row.date_tracked)}">
                 <td>${escapeHtml(day)}</td>
-                <td><span class="st ${escapeHtml(row.current_state)}">${escapeHtml(stateName[row.current_state] || row.current_state)}</span></td>
-                <td class="n">${Math.floor(activeMin/60)}h ${activeMin%60}m</td>
-                <td class="n">${breakMin}m</td>
+                <td><span class="st ${escapeHtml(row.current_state)}" data-cell="st">${escapeHtml(stateName[row.current_state] || row.current_state)}</span></td>
+                <td class="n" data-cell="a">${Math.floor(activeMin/60)}h ${activeMin%60}m</td>
+                <td class="n" data-cell="b">${breakMin}m</td>
             </tr>`;
         }).join('');
+        paintTodayLive();
     }
 
     // ------------------------------------------------------------------
